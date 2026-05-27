@@ -1069,3 +1069,82 @@ def test_ops_check_no_state_writes():
     ]
     for word in forbidden_writes:
         assert word not in content, f"ops_check.ps1 must not contain state-writing pattern: {word}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_v1_0_1_backlog_exists():
+    project_root = _get_project_root()
+    backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
+    assert backlog.exists(), "docs/V1_0_1_BACKLOG.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_v1_0_1_backlog_no_secrets():
+    project_root = _get_project_root()
+    backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
+    if not backlog.exists():
+        pytest.skip("V1_0_1_BACKLOG.md not found")
+    content = backlog.read_text()
+    for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
+        match = pat.search(content)
+        assert not match, f"V1_0_1_BACKLOG.md contains secret-like value: {match.group()[:20]}..."
+    for forbidden in ["DATABASE_URL=postgres", "API_KEY=sk-"]:
+        assert forbidden not in content, f"V1_0_1_BACKLOG.md contains forbidden pattern: {forbidden}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_v1_0_1_backlog_contains_priority_levels():
+    project_root = _get_project_root()
+    backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
+    if not backlog.exists():
+        pytest.skip("V1_0_1_BACKLOG.md not found")
+    content = backlog.read_text()
+    for level in ["P0", "P1", "P2", "P3"]:
+        assert level in content, f"V1_0_1_BACKLOG.md must contain {level} section"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_v1_0_1_backlog_contains_required_items():
+    project_root = _get_project_root()
+    backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
+    if not backlog.exists():
+        pytest.skip("V1_0_1_BACKLOG.md not found")
+    content = backlog.read_text().lower()
+    required_items = [
+        "playwright",
+        "backup freshness",
+        "restore dry-run",
+        "storage orphan",
+        "ops token",
+    ]
+    missing = [item for item in required_items if item not in content]
+    assert not missing, f"V1_0_1_BACKLOG.md missing required items: {missing}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_post_release_issue_template_exists():
+    project_root = _get_project_root()
+    template = project_root / "docs" / "POST_RELEASE_ISSUE_TEMPLATE.md"
+    assert template.exists(), "docs/POST_RELEASE_ISSUE_TEMPLATE.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_post_release_issue_template_no_secrets():
+    project_root = _get_project_root()
+    template = project_root / "docs" / "POST_RELEASE_ISSUE_TEMPLATE.md"
+    if not template.exists():
+        pytest.skip("POST_RELEASE_ISSUE_TEMPLATE.md not found")
+    content = template.read_text()
+    for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
+        match = pat.search(content)
+        assert not match, f"POST_RELEASE_ISSUE_TEMPLATE.md contains secret-like value: {match.group()[:20]}..."
+    for forbidden in ["DATABASE_URL=postgres", "API_KEY=sk-"]:
+        assert forbidden not in content, f"POST_RELEASE_ISSUE_TEMPLATE.md contains forbidden pattern: {forbidden}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_readme_links_v1_0_1_backlog():
+    project_root = _get_project_root()
+    readme = project_root / "README.md"
+    content = readme.read_text()
+    assert "V1_0_1_BACKLOG" in content, "README.md must link to V1_0_1_BACKLOG.md"

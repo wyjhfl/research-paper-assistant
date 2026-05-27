@@ -232,6 +232,8 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 61. **stale job 告警不得自动删除/重置任务**：当 `stale_running_count > 0` 时只能告警，不得自动执行 job 重置、删除或状态修改。需人工判断后操作。
 62. **运维巡检脚本不得通过注册/登录制造状态**：`ops_check.ps1` 等只读巡检脚本不得调用 `/auth/register`、`/auth/login`、`-Method POST` 等写入操作。巡检只能观察，不能创建用户、创建 session 或修改任何数据。如需认证态数据，应输出 WARN 提示人工检查。
 63. **stale job 告警不得自动修复**：巡检发现 `stale_running_count > 0` 时只能输出 WARN，不得自动重置 job 状态、删除 job 或执行任何修复操作。修复需人工判断后手动执行。
+64. **issue/report 不得包含 .env、API key、完整日志 secret**：问题报告（POST_RELEASE_ISSUE_TEMPLATE）中不得粘贴 `.env` 内容、真实 API Key（sk-/tp- 前缀）、DATABASE_URL 真实值、Authorization header、session token。敏感信息必须用 `<REDACTED>` 替换。
+65. **v1.0.1 只能修复明确问题，不把大功能塞进 patch release**：v1.0.1 是 patch 版本，只修复 P0/P1 级明确问题。P2/P3 项和新增功能应排到 v1.1.0 或 v2.0.0。
 
 ## 八、Review Checklist
 
@@ -282,3 +284,6 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 - [ ] Release Notes 是否声称了未实际运行的验收结果？（未重新执行的验收必须标注来源阶段）
 - [ ] tag 前 .env 是否未被 Git 跟踪？（`git ls-files .env` 必须无输出）
 - [ ] tag 前 secret scan 是否通过？（`python scripts/check_docs_secrets.py`）
+- [ ] v1.0.1 backlog 条目是否正确分级 P0/P1/P2/P3？（P0=生产阻塞，P1=高优先级修复，P2=体验增强，P3=后续功能）
+- [ ] v1.0.1 backlog 条目是否有复现和验证路径？（每个条目必须有验证条件）
+- [ ] issue/report 是否包含 .env / API key / 完整日志 secret？（不得包含，必须用 `<REDACTED>` 替换）
