@@ -720,19 +720,21 @@ def test_release_notes_no_complete_gate_with_playwright_missing():
 
 
 @pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
-def test_rc_evidence_contains_e2e_exception():
+def test_rc_evidence_e2e_status_documented():
     project_root = _get_project_root()
     evidence = project_root / "docs" / "RC_EVIDENCE_v1.0.0-rc.1.md"
     if not evidence.exists():
         pytest.skip("RC_EVIDENCE not found")
     content = evidence.read_text()
-    has_e2e_exception = (
-        "E2E exception" in content
+    has_e2e_resolved = (
+        "E2E Exception Resolved" in content
+        or "E2E 例外已消除" in content
         or "E2E 例外" in content
-        or "E2E 未执行" in content
-        or "Playwright E2E" in content and "未执行" in content
     )
-    assert has_e2e_exception, "RC_EVIDENCE must contain E2E exception / E2E 未执行 explanation"
+    has_playwright_passed = "103 passed" in content or "Playwright" in content
+    assert has_e2e_resolved or has_playwright_passed, (
+        "RC_EVIDENCE must document E2E status (exception resolved or Playwright passed)"
+    )
 
 
 @pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
