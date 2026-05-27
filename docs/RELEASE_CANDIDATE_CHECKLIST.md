@@ -6,6 +6,22 @@ RC 门禁命令，按顺序执行，不要并行。
 
 ---
 
+## v1.0.0 正式发布流程
+
+v1.0.0 正式发布基于 v1.0.0-rc.1 + Phase 44 E2E 证据更新。流程如下：
+
+1. 提交 Phase 44 E2E 证据更新（commit 9b39612）
+2. 新增 `docs/RELEASE_NOTES_v1.0.0.md`（正式发布说明）
+3. 新增 `docs/RELEASE_EVIDENCE_v1.0.0.md`（正式发布证据）
+4. 更新 README.md / RELEASE_CANDIDATE_CHECKLIST.md
+5. 运行完整 RC gate（7 步 + backup validate + restore dry-run）
+6. 全部通过后：`git tag -a v1.0.0 -m "v1.0.0"` + `git push origin v1.0.0`
+7. 在 GitHub 创建 Release，关联 v1.0.0 tag
+
+> v1.0.0-rc.1 文档保留为历史记录，不修改已推送的 rc.1 tag。
+
+---
+
 ## 验收分层策略
 
 不要每个小 Phase 都跑完整 E2E / 全量 pytest。根据改动范围选择对应层级：

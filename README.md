@@ -3,7 +3,8 @@
 上传科研 PDF、解析论文、构建论文记忆、进行 RAG 问答、抽取研究 Idea、多 Agent 工作流、推荐引用。
 
 > 开发协作规则见 [AGENTS.md](./AGENTS.md)。
-> Release Notes 见 [RELEASE_NOTES_v1.0.0-rc.1.md](docs/RELEASE_NOTES_v1.0.0-rc.1.md)。
+> Release Notes 见 [RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md)（v1.0.0 正式版）。
+> RC 历史见 [RELEASE_NOTES_v1.0.0-rc.1.md](docs/RELEASE_NOTES_v1.0.0-rc.1.md)。
 
 ## 当前能力
 
