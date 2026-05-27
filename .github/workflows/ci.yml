@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs-and-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements-check.txt 2>/dev/null || true
+
+      - name: Check docs secrets
+        run: python scripts/check_docs_secrets.py
+
+      - name: Check frontend mojibake
+        run: python scripts/check_frontend_mojibake.py
+
+  backend-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Run docs secrets unit test
+        run: python -m pytest tests/test_check_docs_secrets.py -q
+
+      - name: Run lightweight gate tests
+        run: python -m pytest apps/api/tests/test_backup_lifecycle.py -k "release_notes or rc_evidence or deployment or secret_hygiene" -q
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: apps/web
+        run: npm run build

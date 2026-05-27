@@ -5,6 +5,7 @@
 > 开发协作规则见 [AGENTS.md](./AGENTS.md)。
 > Release Notes 见 [RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md)（v1.0.0 正式版）。
 > RC 历史见 [RELEASE_NOTES_v1.0.0-rc.1.md](docs/RELEASE_NOTES_v1.0.0-rc.1.md)。
+> 部署手册见 [DEPLOYMENT_RUNBOOK_v1.0.0.md](docs/DEPLOYMENT_RUNBOOK_v1.0.0.md)。
 
 ## 当前能力
 

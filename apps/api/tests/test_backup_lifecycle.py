@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -752,3 +753,134 @@ def test_rc_evidence_production_check_count_consistent():
             f"RC_EVIDENCE contains conflicting production_check counts: {count_patterns}. "
             "Must explain the difference or use consistent numbers."
         )
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_deployment_runbook_exists():
+    project_root = _get_project_root()
+    runbook = project_root / "docs" / "DEPLOYMENT_RUNBOOK_v1.0.0.md"
+    assert runbook.exists(), "docs/DEPLOYMENT_RUNBOOK_v1.0.0.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_deployment_evidence_exists():
+    project_root = _get_project_root()
+    evidence = project_root / "docs" / "DEPLOYMENT_EVIDENCE_v1.0.0.md"
+    assert evidence.exists(), "docs/DEPLOYMENT_EVIDENCE_v1.0.0.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_deployment_docs_no_secrets():
+    project_root = _get_project_root()
+    secret_patterns = [
+        re.compile(r'sk-[a-zA-Z0-9]{20,}'),
+        re.compile(r'tp-[a-zA-Z0-9]{20,}'),
+        re.compile(r'DATABASE_URL\s*=\s*postgresql://[^\s<]{10,}(?<!localhost/research)(?<!localhost/research_db)'),
+    ]
+    for doc_name in ["DEPLOYMENT_RUNBOOK_v1.0.0.md", "DEPLOYMENT_EVIDENCE_v1.0.0.md"]:
+        doc = project_root / "docs" / doc_name
+        if not doc.exists():
+            continue
+        content = doc.read_text()
+        for pat in secret_patterns:
+            match = pat.search(content)
+            assert not match, f"{doc_name} contains secret-like value: {match.group()[:20]}..."
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_deployment_evidence_contains_artifact_filenames():
+    project_root = _get_project_root()
+    evidence = project_root / "docs" / "DEPLOYMENT_EVIDENCE_v1.0.0.md"
+    if not evidence.exists():
+        pytest.skip("DEPLOYMENT_EVIDENCE not found")
+    content = evidence.read_text()
+    assert "backup_manifest_" in content, "DEPLOYMENT_EVIDENCE must reference backup_manifest_ filename"
+    assert "restore_drill_" in content, "DEPLOYMENT_EVIDENCE must reference restore_drill_ filename"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_deployment_runbook_contains_required_sections():
+    project_root = _get_project_root()
+    runbook = project_root / "docs" / "DEPLOYMENT_RUNBOOK_v1.0.0.md"
+    if not runbook.exists():
+        pytest.skip("DEPLOYMENT_RUNBOOK not found")
+    content = runbook.read_text()
+    required = [("rollback", "回滚"), ("restore dry-run", None), ("production_check", None)]
+    missing = []
+    for en, zh in required:
+        if en.lower() not in content.lower() and (zh is None or zh not in content):
+            missing.append(en)
+    assert not missing, f"DEPLOYMENT_RUNBOOK missing required sections: {missing}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_exists():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    assert ci_yml.exists(), ".github/workflows/ci.yml must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_no_confirm_restore():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    if not ci_yml.exists():
+        pytest.skip("ci.yml not found")
+    content = ci_yml.read_text()
+    assert "ConfirmRestore" not in content, "ci.yml must not contain ConfirmRestore"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_no_env_reference():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    if not ci_yml.exists():
+        pytest.skip("ci.yml not found")
+    content = ci_yml.read_text()
+    assert ".env" not in content, "ci.yml must not reference .env"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_contains_secret_scan():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    if not ci_yml.exists():
+        pytest.skip("ci.yml not found")
+    content = ci_yml.read_text()
+    assert "check_docs_secrets.py" in content, "ci.yml must include check_docs_secrets.py"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_contains_mojibake_scan():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    if not ci_yml.exists():
+        pytest.skip("ci.yml not found")
+    content = ci_yml.read_text()
+    assert "check_frontend_mojibake.py" in content, "ci.yml must include check_frontend_mojibake.py"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_workflow_contains_npm_build():
+    project_root = _get_project_root()
+    ci_yml = project_root / ".github" / "workflows" / "ci.yml"
+    if not ci_yml.exists():
+        pytest.skip("ci.yml not found")
+    content = ci_yml.read_text()
+    assert "npm run build" in content, "ci.yml must include npm run build"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ci_docs_exist_and_no_secrets():
+    project_root = _get_project_root()
+    ci_runbook = project_root / "docs" / "CI_CD_RUNBOOK.md"
+    ops_backlog = project_root / "docs" / "OPERATIONS_BACKLOG.md"
+    found = False
+    for doc in [ci_runbook, ops_backlog]:
+        if doc.exists():
+            found = True
+            content = doc.read_text()
+            for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
+                match = pat.search(content)
+                assert not match, f"{doc.name} contains secret-like value: {match.group()[:20]}..."
+    assert found, "At least one of CI_CD_RUNBOOK.md or OPERATIONS_BACKLOG.md must exist"

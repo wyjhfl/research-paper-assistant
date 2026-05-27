@@ -224,6 +224,9 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 53. **RC gate ManifestPath 不得使用绝对路径**：`rc_gate.ps1` 的 `-ManifestPath` 参数只接受项目相对路径（如 `artifacts/backups/backup_manifest_xxx.json`），传入绝对路径必须拒绝并输出固定错误 `ManifestPath must be project-relative`，不得回显绝对路径。
 54. **Release Notes 不得声称未实际运行的验收结果**：Release Notes 中的验收数据必须标注来源阶段，不得写"ALL CHECKS PASSED"等绝对表述除非在本阶段实际重新执行了完整 rc_gate。未重新执行的验收结果必须注明"Phase XX 执行时结果"。
 55. **tag 前必须确认 Release Notes、.env 未跟踪、secret scan**：创建 v1.0.0-rc.1 tag 前必须确认：(1) Release Notes 文件存在且不含 secrets，(2) `git ls-files .env` 无输出，(3) `python scripts/check_docs_secrets.py` 通过。
+56. **部署记录不得包含 .env / key / 绝对路径**：DEPLOYMENT_EVIDENCE 和任何部署演练文档不得包含 .env 内容、真实 API Key（sk-/tp-前缀）、DATABASE_URL 真实值、宿主机绝对路径。只记录命令摘要和结果状态。
+57. **restore 只能 dry-run**：部署门禁和运维演练中只能执行 `restore_all.ps1 -DryRun`，禁止执行 `-ConfirmRestore`。真实 restore 是独立的手动运维操作。
+58. **Docker artifacts 不得提交到 Git**：`artifacts/backups/`、`artifacts/evals/` 等运行产物已在 `.gitignore` 中，不得提交。部署演练产生的 backup manifest、restore drill 记录仅存于本地。
 
 ## 八、Review Checklist
 
