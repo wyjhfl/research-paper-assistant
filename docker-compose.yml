@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: research_assistant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5500:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8091:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/research_assistant
+      STORAGE_PATH: /app/storage
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - paper_storage:/app/storage
+      - ./artifacts/evals:/app/artifacts/evals
+      - ./artifacts/backups:/app/artifacts/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8091
+      INTERNAL_API_URL: http://backend:8000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  paper_storage:

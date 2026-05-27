@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+out/
+test-results/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Storage
+storage/
+apps/api/uploads/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Eval artifacts
+artifacts/evals/
+
+# Backup artifacts
+artifacts/backups/

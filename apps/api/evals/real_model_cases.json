@@ -1,0 +1,194 @@
+[
+  {
+    "case_id": "single_rag_positive",
+    "type": "single_rag",
+    "description": "English question on single paper, expect answered with >=2 sources",
+    "input": {
+      "paper_filename": "demo_transformer.pdf",
+      "question": "What is the attention mechanism in Transformer models?"
+    },
+    "expected": {
+      "expected_status": "answered",
+      "min_sources": 2,
+      "allowed_rag_status": ["answered"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "single_rag_unrelated",
+    "type": "single_rag",
+    "description": "Unrelated question on single paper, expect insufficient_context",
+    "input": {
+      "paper_filename": "demo_transformer.pdf",
+      "question": "What is the recipe for chocolate cake?"
+    },
+    "expected": {
+      "expected_status": "insufficient_context",
+      "min_sources": 0,
+      "allowed_rag_status": ["insufficient_context"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "multi_rag_positive",
+    "type": "multi_rag",
+    "description": "Cross-paper question, expect answered with sources from >=2 papers",
+    "input": {
+      "question": "How does RAG combine retrieval with generation for multi-agent research assistants?",
+      "top_k": 8
+    },
+    "expected": {
+      "expected_status": "answered",
+      "min_sources": 2,
+      "min_distinct_papers": 2,
+      "allowed_rag_status": ["answered"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "multi_rag_filtered",
+    "type": "multi_rag",
+    "description": "Filtered cross-paper question, sources must not exceed allowed paper_ids",
+    "input": {
+      "paper_filename": "demo_transformer.pdf",
+      "question": "How does the attention mechanism work?",
+      "top_k": 5
+    },
+    "expected": {
+      "expected_status": "answered",
+      "min_sources": 1,
+      "min_distinct_papers": 1,
+      "allowed_rag_status": ["answered", "insufficient_context"],
+      "forbidden_source_paper_ids": "auto",
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "agent_citations_multi",
+    "type": "agent",
+    "description": "Agent recommend_citations_multi, expect completed with rag_status answered",
+    "input": {
+      "task_type": "recommend_citations_multi",
+      "question": "How can RAG and multi-agent systems improve research paper analysis?"
+    },
+    "expected": {
+      "expected_status": "completed",
+      "allowed_rag_status": ["answered", "insufficient_context"],
+      "require_paper_title": true,
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "mcp_search_chunks",
+    "type": "mcp",
+    "description": "MCP search_paper_chunks, expect structured sources with paper_title",
+    "input": {
+      "tool": "search_paper_chunks",
+      "query": "attention mechanism retrieval augmented generation",
+      "limit": 10
+    },
+    "expected": {
+      "min_sources": 1,
+      "require_paper_title": true,
+      "require_no_sensitive_output": true
+    },
+    "severity": "blocker"
+  },
+  {
+    "case_id": "chinese_single_rag_positive",
+    "type": "single_rag",
+    "description": "Chinese question on single paper, expect answered or insufficient_context with sources",
+    "input": {
+      "paper_filename": "demo_transformer.pdf",
+      "question": "Transformer模型中的注意力机制是什么？"
+    },
+    "expected": {
+      "min_sources": 2,
+      "allowed_rag_status": ["answered", "insufficient_context"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  },
+  {
+    "case_id": "chinese_multi_rag_positive",
+    "type": "multi_rag",
+    "description": "Chinese cross-paper question, expect answered or insufficient_context with sources from >=2 papers",
+    "input": {
+      "question": "RAG如何将检索与生成结合以支持多智能体研究助手？",
+      "top_k": 8
+    },
+    "expected": {
+      "min_sources": 2,
+      "min_distinct_papers": 2,
+      "allowed_rag_status": ["answered", "insufficient_context"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  },
+  {
+    "case_id": "citation_no_hallucination_unrelated",
+    "type": "multi_rag",
+    "description": "Clearly unrelated question, must not return answered",
+    "input": {
+      "question": "How do I bake a chocolate cake with strawberries?",
+      "top_k": 5
+    },
+    "expected": {
+      "expected_status": "insufficient_context",
+      "min_sources": 0,
+      "allowed_rag_status": ["insufficient_context"],
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  },
+  {
+    "case_id": "mcp_recommend_citations_global",
+    "type": "mcp",
+    "description": "MCP recommend_citations without paper_id/paper_ids, global search, must have paper_title",
+    "input": {
+      "tool": "recommend_citations",
+      "draft_text": "Recent advances in attention mechanisms have shown promise for improving retrieval tasks.",
+      "limit": 5
+    },
+    "expected": {
+      "min_sources": 1,
+      "require_paper_title": true,
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  },
+  {
+    "case_id": "agent_summarize_paper_real_model",
+    "type": "agent",
+    "description": "Agent summarize_paper, expect completed with structured summary and source_chunk_ids",
+    "input": {
+      "task_type": "summarize_paper",
+      "paper_filename": "demo_transformer.pdf"
+    },
+    "expected": {
+      "expected_status": "completed",
+      "require_source_chunk_ids": true,
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  },
+  {
+    "case_id": "idea_extract_real_model",
+    "type": "idea",
+    "description": "Idea extraction on single paper, expect >=1 candidate with source_chunk_ids",
+    "input": {
+      "paper_filename": "demo_transformer.pdf"
+    },
+    "expected": {
+      "min_candidates": 1,
+      "require_source_chunk_ids": true,
+      "require_no_sensitive_output": true
+    },
+    "severity": "warning"
+  }
+]
