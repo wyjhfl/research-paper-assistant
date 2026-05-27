@@ -1148,3 +1148,26 @@ def test_readme_links_v1_0_1_backlog():
     readme = project_root / "README.md"
     content = readme.read_text()
     assert "V1_0_1_BACKLOG" in content, "README.md must link to V1_0_1_BACKLOG.md"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_env_example_documents_production_https_cookie():
+    project_root = _get_project_root()
+    env_example = project_root / ".env.example"
+    if not env_example.exists():
+        pytest.skip(".env.example not found")
+    content = env_example.read_text()
+    assert "SESSION_COOKIE_SECURE" in content, ".env.example must document SESSION_COOKIE_SECURE"
+    assert "ENV=" in content or "ENV=" in content, ".env.example must document ENV variable"
+    has_https_hint = "HTTPS" in content or "https" in content
+    assert has_https_hint, ".env.example must mention HTTPS for production cookie"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_v1_0_1_backlog_marks_cors_cookie_item():
+    project_root = _get_project_root()
+    backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
+    if not backlog.exists():
+        pytest.skip("V1_0_1_BACKLOG.md not found")
+    content = backlog.read_text()
+    assert "Phase 50" in content, "V1_0_1_BACKLOG.md must mark CORS/cookie item with Phase 50"

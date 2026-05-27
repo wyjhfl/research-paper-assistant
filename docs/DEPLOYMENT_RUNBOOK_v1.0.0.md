@@ -28,10 +28,11 @@ cp .env.example .env
 
 | 变量 | 生产环境必须设置 | 说明 |
 |------|-----------------|------|
+| ENV | `production` | 启用生产模式检查 |
 | AUTH_ENABLED | `true` | 启用真实认证 |
 | ALLOW_DEV_USER_HEADER | `false` | 禁止 X-User-Id 伪造 |
 | SESSION_COOKIE_SECURE | `true`（需 HTTPS） | Session Cookie Secure 属性 |
-| CORS_ALLOWED_ORIGINS | HTTPS 域名 | 允许的跨域来源 |
+| CORS_ALLOWED_ORIGINS | HTTPS 域名（不含 localhost/127.0.0.1） | 允许的跨域来源 |
 | DATABASE_URL | 按实际配置 | 数据库连接 |
 | LLM_PROVIDER / EMBEDDING_PROVIDER | `openai_compatible` | 真实模型 provider |
 | LLM_API_KEY / EMBEDDING_API_KEY | 真实 key（不提交） | API Key |

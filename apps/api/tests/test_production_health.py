@@ -698,7 +698,7 @@ def test_production_cors_wildcard_warns_in_dev():
 def test_production_cors_configured_passes():
     from scripts.production_check import _check_cors
 
-    with patch("app.config.settings.CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001"), \
+    with patch("app.config.settings.CORS_ALLOWED_ORIGINS", "https://example.com,https://app.example.com"), \
          patch("app.config.settings.REAL_MODEL_REQUIRED", True), \
          patch("app.config.settings.ENV", "production"):
         result = _check_cors()
@@ -893,3 +893,55 @@ def test_cors_parse_pure_commas():
 def test_cors_parse_single_origin():
     origins = parse_cors_allowed_origins("http://localhost:3000")
     assert origins == ["http://localhost:3000"]
+
+
+def test_production_cors_localhost_fails_in_production():
+    from scripts.production_check import _check_cors
+    with patch("scripts.production_check.settings") as mock_settings, \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.CORS_ALLOWED_ORIGINS = "http://localhost:3000,https://example.com"
+        result = _check_cors()
+        assert result.status == "FAIL"
+        assert "localhost" in result.message.lower() or "dev origins" in result.message.lower()
+
+
+def test_production_cors_127001_fails_in_production():
+    from scripts.production_check import _check_cors
+    with patch("scripts.production_check.settings") as mock_settings, \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.CORS_ALLOWED_ORIGINS = "http://127.0.0.1:3000"
+        result = _check_cors()
+        assert result.status == "FAIL"
+        assert "127.0.0.1" in result.message or "dev origins" in result.message.lower()
+
+
+def test_production_cors_https_origin_passes():
+    from scripts.production_check import _check_cors
+    with patch("scripts.production_check.settings") as mock_settings, \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.CORS_ALLOWED_ORIGINS = "https://example.com,https://app.example.com"
+        result = _check_cors()
+        assert result.status == "PASS"
+
+
+def test_dev_cors_localhost_allowed_or_warn():
+    from scripts.production_check import _check_cors
+    with patch("scripts.production_check.settings") as mock_settings, \
+         patch("scripts.production_check.is_production", return_value=False):
+        mock_settings.CORS_ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
+        result = _check_cors()
+        assert result.status in ("PASS", "WARN")
+        assert result.status != "FAIL"
+
+
+def test_production_cookie_secure_required():
+    from scripts.production_check import _check_auth_config
+    with patch("scripts.production_check.settings") as mock_settings, \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.AUTH_ENABLED = True
+        mock_settings.ALLOW_DEV_USER_HEADER = False
+        mock_settings.SESSION_COOKIE_SECURE = False
+        mock_settings.SESSION_TTL_SECONDS = 604800
+        result = _check_auth_config()
+        assert result.status == "FAIL"
+        assert "SESSION_COOKIE_SECURE" in result.message

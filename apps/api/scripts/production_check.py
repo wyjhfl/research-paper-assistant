@@ -58,6 +58,14 @@ def _check_cors() -> CheckResult:
         if is_production():
             return CheckResult("CORS", "FAIL", "no origins configured")
         return CheckResult("CORS", "WARN", "no origins configured")
+    if is_production():
+        dev_patterns = ["localhost", "127.0.0.1", "0.0.0.0"]
+        dev_origins = [o for o in origins if any(p in o.lower() for p in dev_patterns)]
+        if dev_origins:
+            return CheckResult("CORS", "FAIL", f"dev origins not allowed in production: {', '.join(dev_origins)}")
+        http_origins = [o for o in origins if o.startswith("http://")]
+        if http_origins:
+            return CheckResult("CORS", "WARN", f"non-HTTPS origins in production: {', '.join(http_origins)}")
     return CheckResult("CORS", "PASS", "configured")
 
 

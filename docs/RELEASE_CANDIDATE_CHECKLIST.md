@@ -166,6 +166,8 @@ powershell -ExecutionPolicy Bypass -File scripts/rc_gate.ps1 -SkipProductionChec
 - 如果 Key 曾暴露（提交到 Git / 出现在日志 / 泄露到公开渠道），必须轮换后再 tag
 - `.env.example` 仅包含安全占位符和开发默认值，不含真实 key
 - `SESSION_COOKIE_SECURE=true` 需要 HTTPS 环境；本地 HTTP 开发可设为 `false`
+- 生产环境 `CORS_ALLOWED_ORIGINS` 不得包含 `*`、`localhost`、`127.0.0.1`、`0.0.0.0`；必须使用 HTTPS 域名
+- 生产环境 `ENV=production` 启用严格检查
 - Release Notes 不含 secrets（sk- / tp- / DATABASE_URL 真实值 / API_KEY 真实值）
 - 当前阶段不跑全量 pytest / Playwright / rc_gate，最终 Phase 43 才跑完整 rc_gate
 

@@ -160,10 +160,11 @@ cd apps/web && npm run build
 | RAG_TOP_K | 5 | RAG 检索返回的 top-k chunk 数 |
 | RAG_SCORE_THRESHOLD | 0.1 | RAG 最低相关性分数阈值 |
 | RAG_EVIDENCE_THRESHOLD | 0.2 | RAG evidence gate 最低词汇重叠率阈值 |
-| CORS_ALLOWED_ORIGINS | http://localhost:3000,http://localhost:3001 | 允许的跨域来源（逗号分隔）；生产推荐 HTTPS 域名 |
+| CORS_ALLOWED_ORIGINS | http://localhost:3000,http://localhost:3001 | 允许的跨域来源（逗号分隔）；**生产必须使用 HTTPS 域名，不得含 localhost/127.0.0.1** |
 | AUTH_ENABLED | false | `true` 启用真实认证，`false` 使用开发模式（X-User-Id header） |
 | ALLOW_DEV_USER_HEADER | true | 是否允许 X-User-Id 请求头；**生产必须设为 `false`** |
 | SESSION_COOKIE_SECURE | false | Session Cookie Secure 属性；**生产 HTTPS 必须设为 `true`**，本地 HTTP 开发用 `false` |
+| ENV | development | 运行环境标识；**生产必须设为 `production`** 启用严格检查 |
 | NEXT_PUBLIC_API_URL | http://localhost:8091 | 浏览器端调用的后端地址 |
 | INTERNAL_API_URL | http://localhost:8091 | Next.js Server Component 调用的后端地址（Docker 中为 http://backend:8000） |
 
