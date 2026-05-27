@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -884,3 +885,187 @@ def test_ci_docs_exist_and_no_secrets():
                 match = pat.search(content)
                 assert not match, f"{doc.name} contains secret-like value: {match.group()[:20]}..."
     assert found, "At least one of CI_CD_RUNBOOK.md or OPERATIONS_BACKLOG.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_no_manifest():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        empty_dir = Path(tmpdir) / "backups"
+        empty_dir.mkdir()
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(empty_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["latest_manifest"] is None
+        assert len(data["warnings"]) > 0
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_recent_manifest_ok():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        manifest = {"timestamp": now_iso, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_20260527.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["latest_manifest"] == "backup_manifest_20260527.json"
+        assert data["age_hours"] <= 24
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_old_manifest_warns_or_fails():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        old_ts = (datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=48)).isoformat()
+        manifest = {"timestamp": old_ts, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_old.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["age_hours"] > 24
+        assert len(data["warnings"]) > 0
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_outputs_filename_only():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        manifest = {"timestamp": now_iso, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_test.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        output_text = result.stdout
+        assert str(backups_dir) not in output_text
+        assert str(tmpdir) not in output_text
+        if data["latest_manifest"]:
+            assert "/" not in data["latest_manifest"]
+            assert "\\" not in data["latest_manifest"]
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_script_exists():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    assert ops_check.exists(), "scripts/ops_check.ps1 must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_no_confirm_restore():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    assert "ConfirmRestore" not in content, "ops_check.ps1 must not contain ConfirmRestore"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_no_backup_or_restore():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    forbidden = ["backup_all", "restore_all", "restore_postgres", "restore_storage"]
+    for word in forbidden:
+        assert word not in content, f"ops_check.ps1 must not execute {word}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_operations_monitoring_doc_exists():
+    project_root = _get_project_root()
+    doc = project_root / "docs" / "OPERATIONS_MONITORING.md"
+    assert doc.exists(), "docs/OPERATIONS_MONITORING.md must exist"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_operations_monitoring_doc_no_secrets():
+    project_root = _get_project_root()
+    doc = project_root / "docs" / "OPERATIONS_MONITORING.md"
+    if not doc.exists():
+        pytest.skip("OPERATIONS_MONITORING.md not found")
+    content = doc.read_text()
+    for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
+        match = pat.search(content)
+        assert not match, f"OPERATIONS_MONITORING.md contains secret-like value: {match.group()[:20]}..."
+    for forbidden in ["DATABASE_URL=postgres", "API_KEY=sk-"]:
+        assert forbidden not in content, f"OPERATIONS_MONITORING.md contains forbidden pattern: {forbidden}"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_no_auth_register_or_login():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    assert "auth/register" not in content, "ops_check.ps1 must not call /auth/register"
+    assert "auth/login" not in content, "ops_check.ps1 must not call /auth/login"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_no_post_methods():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    assert "-Method POST" not in content, "ops_check.ps1 must not use -Method POST"
+    assert "Invoke-RestMethod -Method POST" not in content, "ops_check.ps1 must not use Invoke-RestMethod -Method POST"
+    assert "Invoke-WebRequest -Method POST" not in content, "ops_check.ps1 must not use Invoke-WebRequest -Method POST"
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_ops_check_no_state_writes():
+    project_root = _get_project_root()
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    forbidden_writes = [
+        "ConvertTo-Json",
+        "SessionVariable",
+        "WebSession",
+        "X-User-Id",
+    ]
+    for word in forbidden_writes:
+        assert word not in content, f"ops_check.ps1 must not contain state-writing pattern: {word}"

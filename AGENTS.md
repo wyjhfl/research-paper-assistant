@@ -227,6 +227,11 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 56. **部署记录不得包含 .env / key / 绝对路径**：DEPLOYMENT_EVIDENCE 和任何部署演练文档不得包含 .env 内容、真实 API Key（sk-/tp-前缀）、DATABASE_URL 真实值、宿主机绝对路径。只记录命令摘要和结果状态。
 57. **restore 只能 dry-run**：部署门禁和运维演练中只能执行 `restore_all.ps1 -DryRun`，禁止执行 `-ConfirmRestore`。真实 restore 是独立的手动运维操作。
 58. **Docker artifacts 不得提交到 Git**：`artifacts/backups/`、`artifacts/evals/` 等运行产物已在 `.gitignore` 中，不得提交。部署演练产生的 backup manifest、restore drill 记录仅存于本地。
+59. **ops_check 不得执行写入/恢复操作**：`ops_check.ps1` 是只读巡检脚本，不得包含 backup、restore、数据库写入、文件删除等操作。只检查状态，不修改状态。
+60. **backup freshness 不得输出绝对路径**：`check_backup_freshness.py` 输出 JSON 中 `latest_manifest` 只包含文件名（如 `backup_manifest_20260527_080654.json`），不包含宿主机绝对路径。
+61. **stale job 告警不得自动删除/重置任务**：当 `stale_running_count > 0` 时只能告警，不得自动执行 job 重置、删除或状态修改。需人工判断后操作。
+62. **运维巡检脚本不得通过注册/登录制造状态**：`ops_check.ps1` 等只读巡检脚本不得调用 `/auth/register`、`/auth/login`、`-Method POST` 等写入操作。巡检只能观察，不能创建用户、创建 session 或修改任何数据。如需认证态数据，应输出 WARN 提示人工检查。
+63. **stale job 告警不得自动修复**：巡检发现 `stale_running_count > 0` 时只能输出 WARN，不得自动重置 job 状态、删除 job 或执行任何修复操作。修复需人工判断后手动执行。
 
 ## 八、Review Checklist
 
