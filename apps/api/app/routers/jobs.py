@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..dependencies import get_user_id
+from ..dependencies import get_user_id, get_worker_health_user_id
 from ..services.job_service import JobService, VALID_JOB_TYPES
 from ..schemas.job import (
     JobCreateRequest, JobResponse, JobListResponse,
@@ -72,7 +72,7 @@ def _safe_output_summary(job_type: str, output_json: str | None) -> str | None:
 @router.get("/worker/health", response_model=WorkerHealthResponse)
 async def worker_health(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_user_id),
+    user_id: str | None = Depends(get_worker_health_user_id),
 ):
     service = JobService(db)
     return await service.get_worker_health(user_id)

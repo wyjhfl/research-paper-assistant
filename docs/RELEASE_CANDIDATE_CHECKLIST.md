@@ -200,3 +200,78 @@ python -m pytest tests/test_backup_lifecycle.py -q -k "env_example"
 - 不要并行运行多个后端 pytest，避免 DDL deadlock
 - **production_check FAIL 会立即导致 RC gate 失败退出**，不允许降级为 WARN
 - `-ManifestPath` 只接受项目相对路径（如 `artifacts/backups/backup_manifest_xxx.json`），不接受绝对路径；传入绝对路径会报错 `ManifestPath must be project-relative`
+- 所有 gate 脚本（`verify_all.ps1`、`quick_gate.ps1`、`rc_gate.ps1`）会自动探测宿主机 Python：优先 `python`，其次 `py -3`（Windows Python Launcher）；两者都不存在时明确报错退出，不会静默跳过
+
+## CI Job 说明
+
+CI workflow（`.github/workflows/ci.yml`）包含以下 jobs：
+
+| Job | 触发条件 | 说明 |
+|-----|----------|------|
+| docs-and-security | 所有触发 | 文档密钥扫描 + 前端乱码扫描 |
+| backend-unit | 所有触发 | 轻量后端测试（不依赖数据库） |
+| frontend-build | 所有触发 | Next.js 构建验证 |
+| frontend-e2e | push main / workflow_dispatch | Playwright E2E 测试（不在 PR 默认运行） |
+| backend-integration | push main / workflow_dispatch | Docker Compose DB 集成测试（使用 docker-compose.ci.yml，不读取 .env） |
+
+- workflow_dispatch 可手动触发完整 CI，可选 run_e2e / run_backend_integration
+- 并发控制：同一分支新提交取消旧运行
+- CI 不运行 eval_real_model.py、不执行 restore、不上传 artifacts/backups
+- backend-integration 使用显式测试文件列表，不包含 test_backup_lifecycle.py / test_production_health.py
+
+## Backup Freshness Workflow
+
+| 触发 | 说明 |
+|------|------|
+| schedule | 每日 00:30 UTC（需 `BACKUP_FRESHNESS_ENABLED=true`） |
+| workflow_dispatch | 手动触发，不受 `BACKUP_FRESHNESS_ENABLED` 限制 |
+
+- 只读检查，不备份、不 restore、不删除文件
+- 权限最小化 `permissions: contents: read`
+- 按 manifest `timestamp` 字段选择最新 manifest（不按文件 mtime），timestamp 缺失/非法才 fallback mtime
+- 损坏 JSON manifest 跳过并在 warnings 中记录文件名；全部损坏则 `ok=false`、exit 1
+- **生产落地前提**：self-hosted runner 或外部监控环境能访问备份 manifest 目录
+- **GitHub hosted runner 不具备生产备份可见性**，不能把它的结果当作生产备份状态
+- 不上传 backup artifacts
+
+## RC Evidence Pack
+
+v1.0.1 RC 证据包收集步骤：
+
+```powershell
+python scripts/collect_rc_evidence.py --output-dir artifacts/rc
+```
+
+- 只读收集，不执行 backup、restore、cleanup --confirm、docker compose up、真实模型 eval
+- 输出到 `artifacts/rc/`（已 gitignored）
+- 输出 JSON + Markdown 摘要
+- 证据内容：timestamp、version、git branch/commit/dirty、workflow 文件存在性、scanner 结果、backup freshness 启用说明
+- 证据不得包含：.env 内容、API key、Authorization、DATABASE_URL 真实值、session token、artifacts/backups 内容、artifacts/evals 内容、宿主机绝对路径
+- git 不可用时记录 unavailable，不失败
+- scanner 失败时 exit 1
+- 不是 CI 自动上传，是本地/人工 RC 流程
+
+## Pre-Tag Check
+
+v1.0.1-rc.1 打 tag 前检查步骤：
+
+```powershell
+python scripts/pre_tag_check.py
+```
+
+- 只读检查，不创建 tag、不 push、不执行 restore/backup/cleanup --confirm/docker compose up/eval_real_model
+- 检查项：
+  - RELEASE_NOTES_v1.0.1-rc.1.md 存在且不含 ALL CHECKS PASSED
+  - collect_rc_evidence.py 存在
+  - artifacts/rc/ 已 gitignored
+  - .env 未被 git 跟踪（git 不可用时记录 warning，不误报通过）
+  - docs secret scan 通过
+  - frontend mojibake scan 通过
+  - backup-freshness.yml 存在且有 BACKUP_FRESHNESS_ENABLED gate
+  - ci.yml 不包含 ConfirmRestore/eval_real_model/artifacts/backups upload
+  - version metadata 一致（config.py、.env.example、API_CONTRACT.md）
+- 输出结构化 JSON：ok、checks[]、warnings[]
+- FAIL 项存在时 exit 1；只有 warnings 时 exit 0
+- 不输出绝对路径和 secrets
+- 不是 CI 自动流程，是本地/人工 RC 流程，不自动创建 tag
+- **pre_tag_check 需要 git 可用**：git 不可用时 .env 跟踪检查返回 ok=false，必须人工修复环境或手动执行等价检查（`git ls-files .env`），不能视为通过

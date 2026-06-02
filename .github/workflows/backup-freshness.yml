@@ -1,0 +1,49 @@
+name: Backup Freshness
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: "Max backup age in hours"
+        type: string
+        default: "24"
+      backups_dir:
+        description: "Backups directory path (must be accessible on runner)"
+        type: string
+        default: "artifacts/backups"
+      allow_missing_manifest:
+        description: "Warn instead of fail when no manifest found"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  check-freshness:
+    if: github.event_name != 'schedule' || vars.BACKUP_FRESHNESS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Note on runner requirements
+        run: |
+          echo "::warning::GitHub hosted runners cannot access production backup directories."
+          echo "This workflow is designed for self-hosted runners or environments where BACKUPS_DIR is available."
+          echo "If backups_dir is not accessible, the check will fail or warn (depending on allow_missing_manifest)."
+          echo "Do NOT interpret a failure on a hosted runner as a production backup issue."
+          echo "Schedule runs require BACKUP_FRESHNESS_ENABLED=true repository variable."
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check backup freshness
+        run: |
+          python scripts/check_backup_freshness.py \
+            --backups-dir "${{ inputs.backups_dir || 'artifacts/backups' }}" \
+            --max-age-hours "${{ inputs.max_age_hours || '24' }}" \
+            ${{ inputs.allow_missing_manifest && '--allow-missing-manifest' || '' }}

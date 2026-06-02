@@ -1,0 +1,11 @@
+services:
+  backend:
+    env_file: []
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/research_assistant
+      STORAGE_PATH: /app/storage
+      REAL_MODEL_REQUIRED: "false"
+      LLM_PROVIDER: local
+      LLM_MODEL: local-mock
+      EMBEDDING_PROVIDER: local
+      EMBEDDING_MODEL: local-hash

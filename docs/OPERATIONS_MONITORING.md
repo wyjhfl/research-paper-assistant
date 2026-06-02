@@ -24,6 +24,8 @@ python scripts/check_backup_freshness.py --max-age-hours 24
 | Storage audit | ops_check | missing_count > 0 |
 | Backup freshness | check_backup_freshness.py | 最新备份超过 24h |
 
+> **Backup freshness 定时检查**：GitHub Actions workflow `backup-freshness.yml` 每日 00:30 UTC 自动运行。默认 schedule 不执行（避免 hosted runner 默认红灯），需在 GitHub 仓库设置 `BACKUP_FRESHNESS_ENABLED=true` repository variable 后才启用。生产落地需要 self-hosted runner 或外部监控环境能访问备份 manifest 目录。GitHub hosted runner 不具备生产备份可见性，不能把它的结果当作生产备份状态。stale/missing manifest 只告警/失败，不自动 backup、不 restore、不删除文件。`check_backup_freshness.py` 按 manifest `timestamp` 字段选择最新 manifest（不按文件 mtime），timestamp 缺失/非法才 fallback mtime 并在 warnings 中说明。损坏 JSON manifest 会跳过；全部损坏则失败。
+
 ## 每周检查
 
 ### 执行命令
@@ -69,6 +71,8 @@ docker compose exec -T backend python scripts/storage_audit.py
 | Alembic 版本落后 | 不在 head | 中 |
 | Storage orphan 增长 | orphan_count 异常 | 低 |
 
+> **orphan_count 异常增长只告警，不自动修复。** 需人工按 OPERATIONS_RUNBOOK.md 中 Storage Orphan 清理 SOP 执行 dry-run → 审核 → --confirm。禁止自动化 --confirm。
+
 ## 告警建议
 
 - 邮件 / Slack / 企业微信通知
@@ -83,4 +87,4 @@ docker compose exec -T backend python scripts/storage_audit.py
 3. **stale job 告警不自动删除/重置任务**：需人工判断后操作
 4. **所有 restore 只能 dry-run**：`-ConfirmRestore` 需人工审批
 5. **不读取 .env**：监控脚本不依赖 .env 内容
-6. **worker health 认证场景**：当 AUTH_ENABLED=true 且 worker health 端点需要认证时，ops_check 只记录 WARN（`worker health requires authenticated session; skipped in read-only ops_check`），不自动登录。如需认证态 worker health 数据，应由人工在受控环境手动检查，或未来设计只读 ops token（不在本阶段实现）
+6. **worker health 认证场景**：当 AUTH_ENABLED=true 时，可配置 OPS_TOKEN 环境变量让 ops_check 通过 X-Ops-Token header 访问 /jobs/worker/health。OPS_TOKEN 只允许访问 worker health 端点（全局统计），不允许访问 /jobs 等业务接口。OPS_TOKEN 为空时，ops_check 仍 WARN 跳过。token 比较使用 hmac.compare_digest 防止 timing leak。不要在日志或 API 响应中输出 OPS_TOKEN 值

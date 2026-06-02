@@ -55,9 +55,13 @@ class JobService:
     async def cancel_job(self, user_id: str, job_id: str) -> bool:
         return await self.repo.cancel_job(job_id, user_id)
 
-    async def get_worker_health(self, user_id: str) -> dict:
-        counts = await self.repo.count_by_user_and_status(user_id)
-        stale_count = await self.repo.count_stale_running(user_id, settings.JOB_STALE_RUNNING_SECONDS)
+    async def get_worker_health(self, user_id: str | None) -> dict:
+        if user_id is None:
+            counts = await self.repo.count_global_by_status()
+            stale_count = await self.repo.count_global_stale_running(settings.JOB_STALE_RUNNING_SECONDS)
+        else:
+            counts = await self.repo.count_by_user_and_status(user_id)
+            stale_count = await self.repo.count_stale_running(user_id, settings.JOB_STALE_RUNNING_SECONDS)
         return {
             "worker_enabled": settings.JOB_WORKER_ENABLED,
             "poll_interval_seconds": settings.JOB_POLL_INTERVAL_SECONDS,

@@ -15,6 +15,35 @@ from app.database import async_session
 from app.models import Paper
 
 
+def _referenced_rel_path(file_path: str, storage_root: Path) -> str | None:
+    resolved_root = storage_root.resolve()
+    p = Path(file_path)
+
+    if p.is_absolute():
+        try:
+            return str(p.resolve().relative_to(resolved_root)).replace("\\", "/")
+        except ValueError:
+            return None
+
+    resolved_cwd = Path.cwd().resolve()
+    candidate = (resolved_cwd / p).resolve()
+    try:
+        return str(candidate.relative_to(resolved_root)).replace("\\", "/")
+    except ValueError:
+        pass
+
+    parts = p.parts
+    if parts and parts[0] == resolved_root.name:
+        stripped = Path(*parts[1:])
+        if stripped.parts:
+            return str(stripped).replace("\\", "/")
+
+    if not p.is_absolute():
+        return str(p).replace("\\", "/")
+
+    return None
+
+
 async def run_audit() -> dict:
     storage_path = Path(settings.STORAGE_PATH)
     if not storage_path.exists():
@@ -30,14 +59,16 @@ async def run_audit() -> dict:
         }
 
     all_files: dict[str, int] = {}
-    for root, _dirs, files in os.walk(storage_path):
+    for root, _dirs, files in os.walk(storage_path, followlinks=False):
         for f in files:
             fp = Path(root) / f
+            if fp.is_symlink():
+                continue
             try:
-                size = fp.stat().st_size
+                size = fp.stat(follow_symlinks=False).st_size
             except OSError:
                 size = 0
-            rel = str(fp.relative_to(storage_path))
+            rel = str(fp.relative_to(storage_path)).replace("\\", "/")
             all_files[rel] = size
 
     async with async_session() as session:
@@ -47,15 +78,15 @@ async def run_audit() -> dict:
     referenced_rels: set[str] = set()
     missing_files: list[str] = []
     for file_path, filename in db_entries:
-        try:
-            rel = str(Path(file_path).relative_to(storage_path))
-        except ValueError:
-            rel = str(Path(file_path).name)
-        referenced_rels.add(rel)
-        if rel not in all_files and not Path(file_path).exists():
-            missing_files.append(filename or rel)
+        rel = _referenced_rel_path(file_path, storage_path)
+        if rel is not None:
+            referenced_rels.add(rel)
+            if rel not in all_files and not Path(file_path).exists():
+                missing_files.append(filename or rel)
 
     orphan_files = [rel for rel in all_files if rel not in referenced_rels]
+
+    orphan_bytes = sum(all_files.get(f, 0) for f in orphan_files)
 
     return {
         "storage_path_exists": True,
@@ -63,7 +94,7 @@ async def run_audit() -> dict:
         "total_bytes": sum(all_files.values()),
         "orphan_files": sorted(orphan_files),
         "orphan_count": len(orphan_files),
-        "orphan_bytes": sum(all_files.get(f, 0) for f in orphan_files),
+        "orphan_bytes": orphan_bytes,
         "missing_files": sorted(missing_files),
         "missing_count": len(missing_files),
     }

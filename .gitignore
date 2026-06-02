@@ -41,3 +41,6 @@ artifacts/evals/
 
 # Backup artifacts
 artifacts/backups/
+
+# RC evidence artifacts
+artifacts/rc/

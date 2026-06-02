@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -195,7 +195,7 @@ def test_restore_dry_run_no_destructive_ops():
         result = validate_manifest(str(manifest_path))
         assert result["ok"] is True
 
-        assert db_file.read_text() == "dummy db"
+        assert db_file.read_text(encoding="utf-8") == "dummy db"
         assert storage_file.read_bytes() == b"dummy storage"
 
 
@@ -267,7 +267,7 @@ def test_powershell_dry_run_success():
         assert str(project_root) not in stdout
         assert tmpdir not in stdout
 
-        assert db_file.read_text() == "dummy db content"
+        assert db_file.read_text(encoding="utf-8") == "dummy db content"
         assert storage_file.read_bytes() == b"dummy storage content"
 
         drill_files = sorted(
@@ -276,7 +276,7 @@ def test_powershell_dry_run_success():
         )
         assert len(drill_files) >= 1
         latest_drill = drill_files[-1]
-        drill_data = json.loads(latest_drill.read_text())
+        drill_data = json.loads(latest_drill.read_text(encoding="utf-8"))
         assert drill_data["ok"] is True
         assert drill_data["dry_run"] is True
         assert drill_data["db_backup_present"] is True
@@ -327,7 +327,7 @@ def test_powershell_dry_run_missing_storage_fails():
         assert "restore_postgres.ps1" not in stdout
         assert "restore_storage.ps1" not in stdout
 
-        assert db_file.read_text() == "dummy db content"
+        assert db_file.read_text(encoding="utf-8") == "dummy db content"
 
         drill_files = sorted(
             (project_root / "artifacts" / "backups").glob("restore_drill_*.json"),
@@ -335,7 +335,7 @@ def test_powershell_dry_run_missing_storage_fails():
         )
         assert len(drill_files) >= 1
         latest_drill = drill_files[-1]
-        drill_data = json.loads(latest_drill.read_text())
+        drill_data = json.loads(latest_drill.read_text(encoding="utf-8"))
         assert drill_data["ok"] is False
         assert drill_data["dry_run"] is True
         assert drill_data["storage_backup_present"] is False
@@ -356,7 +356,7 @@ def test_rc_gate_no_confirm_restore():
     if not (project_root / "scripts").exists():
         pytest.skip("project root not accessible in container")
     rc_gate = project_root / "scripts" / "rc_gate.ps1"
-    content = rc_gate.read_text()
+    content = rc_gate.read_text(encoding="utf-8")
     assert "-ConfirmRestore" not in content
 
 
@@ -366,7 +366,7 @@ def test_release_candidate_checklist_contains_validate_and_dryrun():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     checklist = project_root / "docs" / "RELEASE_CANDIDATE_CHECKLIST.md"
-    content = checklist.read_text()
+    content = checklist.read_text(encoding="utf-8")
     assert "validate_backup_manifest" in content
     assert "DryRun" in content or "-DryRun" in content
 
@@ -377,7 +377,7 @@ def test_operations_runbook_no_secrets():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     runbook = project_root / "docs" / "OPERATIONS_RUNBOOK.md"
-    content = runbook.read_text()
+    content = runbook.read_text(encoding="utf-8")
     for pattern in ["sk-", "tp-", "API_KEY=", "Authorization:", "DATABASE_URL="]:
         assert pattern not in content
 
@@ -388,7 +388,7 @@ def test_drill_file_selection_sorted():
     if not (project_root / "apps").exists():
         pytest.skip("project root not accessible in container")
     test_file = project_root / "apps" / "api" / "tests" / "test_backup_lifecycle.py"
-    content = test_file.read_text()
+    content = test_file.read_text(encoding="utf-8")
     assert "sorted(" in content
     assert "st_mtime" in content
 
@@ -399,7 +399,7 @@ def test_rc_gate_no_fail_warn_downgrade():
     if not (project_root / "scripts").exists():
         pytest.skip("project root not accessible in container")
     rc_gate = project_root / "scripts" / "rc_gate.ps1"
-    content = rc_gate.read_text()
+    content = rc_gate.read_text(encoding="utf-8")
     assert "RESULT: FAIL" not in content
 
 
@@ -409,7 +409,7 @@ def test_rc_gate_prod_check_throws_on_nonzero():
     if not (project_root / "scripts").exists():
         pytest.skip("project root not accessible in container")
     rc_gate = project_root / "scripts" / "rc_gate.ps1"
-    content = rc_gate.read_text()
+    content = rc_gate.read_text(encoding="utf-8")
     prod_check_block_start = content.find('"Production check"')
     assert prod_check_block_start > 0
     prod_check_block = content[prod_check_block_start:prod_check_block_start + 300]
@@ -423,7 +423,7 @@ def test_checklist_manifest_path_project_relative():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     checklist = project_root / "docs" / "RELEASE_CANDIDATE_CHECKLIST.md"
-    content = checklist.read_text()
+    content = checklist.read_text(encoding="utf-8")
     assert "project-relative" in content or "project relative" in content.lower() or "相对路径" in content
 
 
@@ -433,7 +433,7 @@ def test_rc_gate_rejects_absolute_manifest_path():
     if not (project_root / "scripts").exists():
         pytest.skip("project root not accessible in container")
     rc_gate = project_root / "scripts" / "rc_gate.ps1"
-    content = rc_gate.read_text()
+    content = rc_gate.read_text(encoding="utf-8")
     assert "IsPathRooted" in content
     assert "ManifestPath must be project-relative" in content
 
@@ -485,7 +485,7 @@ def test_env_example_contains_production_config_keys():
     env_example = project_root / ".env.example"
     if not env_example.exists():
         pytest.skip(".env.example not found")
-    content = env_example.read_text()
+    content = env_example.read_text(encoding="utf-8")
     missing = [k for k in _REQUIRED_ENV_EXAMPLE_KEYS if f"{k}=" not in content]
     assert not missing, f".env.example missing production config keys: {missing}"
 
@@ -496,7 +496,7 @@ def test_env_example_no_real_keys():
     env_example = project_root / ".env.example"
     if not env_example.exists():
         pytest.skip(".env.example not found")
-    content = env_example.read_text()
+    content = env_example.read_text(encoding="utf-8")
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -514,7 +514,7 @@ def test_gitignore_contains_env():
     gitignore = project_root / ".gitignore"
     if not gitignore.exists():
         pytest.skip(".gitignore not found")
-    content = gitignore.read_text()
+    content = gitignore.read_text(encoding="utf-8")
     lines = [l.strip() for l in content.splitlines()]
     assert ".env" in lines, ".gitignore does not contain .env entry"
 
@@ -525,7 +525,7 @@ def test_release_checklist_contains_rc_tag_security_checks():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     checklist = project_root / "docs" / "RELEASE_CANDIDATE_CHECKLIST.md"
-    content = checklist.read_text()
+    content = checklist.read_text(encoding="utf-8")
     assert "git ls-files .env" in content
     assert "SESSION_COOKIE_SECURE" in content
 
@@ -543,7 +543,7 @@ def test_quick_gate_no_full_pytest():
     quick_gate = project_root / "scripts" / "quick_gate.ps1"
     if not quick_gate.exists():
         pytest.skip("quick_gate.ps1 not found")
-    content = quick_gate.read_text()
+    content = quick_gate.read_text(encoding="utf-8")
     assert "pytest tests/" not in content
     assert "pytest tests/ -q" not in content
 
@@ -554,7 +554,7 @@ def test_quick_gate_no_playwright():
     quick_gate = project_root / "scripts" / "quick_gate.ps1"
     if not quick_gate.exists():
         pytest.skip("quick_gate.ps1 not found")
-    content = quick_gate.read_text()
+    content = quick_gate.read_text(encoding="utf-8")
     assert "playwright test" not in content
 
 
@@ -564,7 +564,7 @@ def test_quick_gate_no_restore():
     quick_gate = project_root / "scripts" / "quick_gate.ps1"
     if not quick_gate.exists():
         pytest.skip("quick_gate.ps1 not found")
-    content = quick_gate.read_text()
+    content = quick_gate.read_text(encoding="utf-8")
     assert "restore_all.ps1" not in content
 
 
@@ -574,7 +574,7 @@ def test_release_checklist_contains_level_tiers():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     checklist = project_root / "docs" / "RELEASE_CANDIDATE_CHECKLIST.md"
-    content = checklist.read_text()
+    content = checklist.read_text(encoding="utf-8")
     assert "Level 1" in content
     assert "Level 2" in content
     assert "Level 3" in content
@@ -587,7 +587,7 @@ def test_operations_runbook_contains_pytest_hang_recovery():
     if not (project_root / "docs").exists():
         pytest.skip("project root not accessible in container")
     runbook = project_root / "docs" / "OPERATIONS_RUNBOOK.md"
-    content = runbook.read_text()
+    content = runbook.read_text(encoding="utf-8")
     assert "TRUNCATE" in content
     assert "pg_terminate_backend" in content
     assert "pytest" in content.lower() and "hang" in content.lower()
@@ -606,7 +606,7 @@ def test_release_notes_no_secrets():
     rn = project_root / "docs" / "RELEASE_NOTES_v1.0.0-rc.1.md"
     if not rn.exists():
         pytest.skip("RELEASE_NOTES not found")
-    content = rn.read_text()
+    content = rn.read_text(encoding="utf-8")
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith("|") or stripped.startswith("-") or stripped.startswith(">"):
@@ -622,7 +622,7 @@ def test_release_notes_no_secrets():
 def test_readme_links_release_notes():
     project_root = _get_project_root()
     readme = project_root / "README.md"
-    content = readme.read_text()
+    content = readme.read_text(encoding="utf-8")
     assert "RELEASE_NOTES_v1.0.0-rc.1" in content
 
 
@@ -632,7 +632,7 @@ def test_release_notes_no_unverified_all_checks_passed():
     rn = project_root / "docs" / "RELEASE_NOTES_v1.0.0-rc.1.md"
     if not rn.exists():
         pytest.skip("RELEASE_NOTES not found")
-    content = rn.read_text()
+    content = rn.read_text(encoding="utf-8")
     for line in content.splitlines():
         stripped = line.strip()
         if "ALL CHECKS PASSED" in stripped and "Phase" not in stripped:
@@ -645,7 +645,7 @@ def test_release_notes_no_fixed_narrow_test_count():
     rn = project_root / "docs" / "RELEASE_NOTES_v1.0.0-rc.1.md"
     if not rn.exists():
         pytest.skip("RELEASE_NOTES not found")
-    content = rn.read_text()
+    content = rn.read_text(encoding="utf-8")
     import re
     fragile_patterns = [r"\d+ passed\s*\("]
     for pat in fragile_patterns:
@@ -659,7 +659,7 @@ def test_release_notes_no_future_tense_phase43():
     rn = project_root / "docs" / "RELEASE_NOTES_v1.0.0-rc.1.md"
     if not rn.exists():
         pytest.skip("RELEASE_NOTES not found")
-    content = rn.read_text()
+    content = rn.read_text(encoding="utf-8")
     future_patterns = [
         "将在 Phase 43 执行",
         "将在 Phase 43",
@@ -682,7 +682,7 @@ def test_rc_evidence_no_secrets():
     evidence = project_root / "docs" / "RC_EVIDENCE_v1.0.0-rc.1.md"
     if not evidence.exists():
         pytest.skip("RC_EVIDENCE not found")
-    content = evidence.read_text()
+    content = evidence.read_text(encoding="utf-8")
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith("|") or stripped.startswith("-") or stripped.startswith(">"):
@@ -702,7 +702,7 @@ def test_rc_evidence_contains_artifact_filenames():
     evidence = project_root / "docs" / "RC_EVIDENCE_v1.0.0-rc.1.md"
     if not evidence.exists():
         pytest.skip("RC_EVIDENCE not found")
-    content = evidence.read_text()
+    content = evidence.read_text(encoding="utf-8")
     assert "backup_manifest_" in content, "RC_EVIDENCE missing backup_manifest_ filename"
     assert "restore_drill_" in content, "RC_EVIDENCE missing restore_drill_ filename"
 
@@ -713,7 +713,7 @@ def test_release_notes_no_complete_gate_with_playwright_missing():
     rn = project_root / "docs" / "RELEASE_NOTES_v1.0.0-rc.1.md"
     if not rn.exists():
         pytest.skip("RELEASE_NOTES not found")
-    content = rn.read_text()
+    content = rn.read_text(encoding="utf-8")
     has_complete_gate = "完整 RC gate" in content or "完整RC gate" in content
     has_playwright_not_run = "Playwright" in content and ("未执行" in content or "未在" in content)
     assert not (has_complete_gate and has_playwright_not_run), (
@@ -727,7 +727,7 @@ def test_rc_evidence_e2e_status_documented():
     evidence = project_root / "docs" / "RC_EVIDENCE_v1.0.0-rc.1.md"
     if not evidence.exists():
         pytest.skip("RC_EVIDENCE not found")
-    content = evidence.read_text()
+    content = evidence.read_text(encoding="utf-8")
     has_e2e_resolved = (
         "E2E Exception Resolved" in content
         or "E2E 例外已消除" in content
@@ -745,7 +745,7 @@ def test_rc_evidence_production_check_count_consistent():
     evidence = project_root / "docs" / "RC_EVIDENCE_v1.0.0-rc.1.md"
     if not evidence.exists():
         pytest.skip("RC_EVIDENCE not found")
-    content = evidence.read_text()
+    content = evidence.read_text(encoding="utf-8")
     import re
     count_patterns = re.findall(r'(\d+)/\d+\s+ALL CHECKS PASSED', content)
     if len(count_patterns) >= 2:
@@ -782,7 +782,7 @@ def test_deployment_docs_no_secrets():
         doc = project_root / "docs" / doc_name
         if not doc.exists():
             continue
-        content = doc.read_text()
+        content = doc.read_text(encoding="utf-8")
         for pat in secret_patterns:
             match = pat.search(content)
             assert not match, f"{doc_name} contains secret-like value: {match.group()[:20]}..."
@@ -794,7 +794,7 @@ def test_deployment_evidence_contains_artifact_filenames():
     evidence = project_root / "docs" / "DEPLOYMENT_EVIDENCE_v1.0.0.md"
     if not evidence.exists():
         pytest.skip("DEPLOYMENT_EVIDENCE not found")
-    content = evidence.read_text()
+    content = evidence.read_text(encoding="utf-8")
     assert "backup_manifest_" in content, "DEPLOYMENT_EVIDENCE must reference backup_manifest_ filename"
     assert "restore_drill_" in content, "DEPLOYMENT_EVIDENCE must reference restore_drill_ filename"
 
@@ -805,7 +805,7 @@ def test_deployment_runbook_contains_required_sections():
     runbook = project_root / "docs" / "DEPLOYMENT_RUNBOOK_v1.0.0.md"
     if not runbook.exists():
         pytest.skip("DEPLOYMENT_RUNBOOK not found")
-    content = runbook.read_text()
+    content = runbook.read_text(encoding="utf-8")
     required = [("rollback", "回滚"), ("restore dry-run", None), ("production_check", None)]
     missing = []
     for en, zh in required:
@@ -827,7 +827,7 @@ def test_ci_workflow_no_confirm_restore():
     ci_yml = project_root / ".github" / "workflows" / "ci.yml"
     if not ci_yml.exists():
         pytest.skip("ci.yml not found")
-    content = ci_yml.read_text()
+    content = ci_yml.read_text(encoding="utf-8")
     assert "ConfirmRestore" not in content, "ci.yml must not contain ConfirmRestore"
 
 
@@ -837,7 +837,7 @@ def test_ci_workflow_no_env_reference():
     ci_yml = project_root / ".github" / "workflows" / "ci.yml"
     if not ci_yml.exists():
         pytest.skip("ci.yml not found")
-    content = ci_yml.read_text()
+    content = ci_yml.read_text(encoding="utf-8")
     assert ".env" not in content, "ci.yml must not reference .env"
 
 
@@ -847,7 +847,7 @@ def test_ci_workflow_contains_secret_scan():
     ci_yml = project_root / ".github" / "workflows" / "ci.yml"
     if not ci_yml.exists():
         pytest.skip("ci.yml not found")
-    content = ci_yml.read_text()
+    content = ci_yml.read_text(encoding="utf-8")
     assert "check_docs_secrets.py" in content, "ci.yml must include check_docs_secrets.py"
 
 
@@ -857,7 +857,7 @@ def test_ci_workflow_contains_mojibake_scan():
     ci_yml = project_root / ".github" / "workflows" / "ci.yml"
     if not ci_yml.exists():
         pytest.skip("ci.yml not found")
-    content = ci_yml.read_text()
+    content = ci_yml.read_text(encoding="utf-8")
     assert "check_frontend_mojibake.py" in content, "ci.yml must include check_frontend_mojibake.py"
 
 
@@ -867,7 +867,7 @@ def test_ci_workflow_contains_npm_build():
     ci_yml = project_root / ".github" / "workflows" / "ci.yml"
     if not ci_yml.exists():
         pytest.skip("ci.yml not found")
-    content = ci_yml.read_text()
+    content = ci_yml.read_text(encoding="utf-8")
     assert "npm run build" in content, "ci.yml must include npm run build"
 
 
@@ -880,7 +880,7 @@ def test_ci_docs_exist_and_no_secrets():
     for doc in [ci_runbook, ops_backlog]:
         if doc.exists():
             found = True
-            content = doc.read_text()
+            content = doc.read_text(encoding="utf-8")
             for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
                 match = pat.search(content)
                 assert not match, f"{doc.name} contains secret-like value: {match.group()[:20]}..."
@@ -982,6 +982,347 @@ def test_backup_freshness_outputs_filename_only():
 
 
 @pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_compact_z_timestamp():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        now_compact = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
+        manifest = {"timestamp": now_compact, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_compact_z.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["age_hours"] <= 24
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_old_compact_z_timestamp_stale():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        old_dt = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=48)
+        old_compact = old_dt.strftime("%Y%m%d_%H%M%SZ")
+        manifest = {"timestamp": old_compact, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_old_compact.json"
+        manifest_path.write_text(json.dumps(manifest))
+        import os
+        os.utime(manifest_path, (datetime.now(timezone.utc).timestamp(), datetime.now(timezone.utc).timestamp()))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["age_hours"] > 24
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_iso_z_timestamp():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        manifest = {"timestamp": "2026-05-31T00:30:00Z", "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_iso_z.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "8760"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_naive_timestamp_no_crash():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+        now_naive = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        manifest = {"timestamp": now_naive, "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_naive.json"
+        manifest_path.write_text(json.dumps(manifest))
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_allow_missing_manifest():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        empty_dir = Path(tmpdir) / "backups"
+        empty_dir.mkdir()
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(empty_dir), "--allow-missing-manifest"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["latest_manifest"] is None
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_selects_by_timestamp_not_mtime():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        fresh_manifest = {"timestamp": now_iso, "app_version": "1.0.0"}
+        fresh_path = backups_dir / "backup_manifest_fresh.json"
+        fresh_path.write_text(json.dumps(fresh_manifest))
+
+        old_dt = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=48)
+        old_iso = old_dt.isoformat()
+        old_manifest = {"timestamp": old_iso, "app_version": "1.0.0"}
+        old_path = backups_dir / "backup_manifest_old.json"
+        old_path.write_text(json.dumps(old_manifest))
+
+        import os
+        os.utime(old_path, (datetime.now(timezone.utc).timestamp(), datetime.now(timezone.utc).timestamp()))
+        os.utime(fresh_path, (old_dt.timestamp(), old_dt.timestamp()))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["latest_manifest"] == "backup_manifest_fresh.json"
+        assert data["age_hours"] <= 24
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_old_mtime_does_not_mask_stale():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        old_dt = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=48)
+        old_compact = old_dt.strftime("%Y%m%d_%H%M%SZ")
+        old_manifest = {"timestamp": old_compact, "app_version": "1.0.0"}
+        old_path = backups_dir / "backup_manifest_old_mtime.json"
+        old_path.write_text(json.dumps(old_manifest))
+
+        import os
+        os.utime(old_path, (datetime.now(timezone.utc).timestamp(), datetime.now(timezone.utc).timestamp()))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["age_hours"] > 24
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_missing_timestamp_falls_back_to_mtime():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        manifest_no_ts = {"app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_no_ts.json"
+        manifest_path.write_text(json.dumps(manifest_no_ts))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["timestamp_source"] == "mtime_fallback"
+        assert any("mtime fallback" in w for w in data["warnings"])
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_skips_bad_json_selects_good():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        bad_path = backups_dir / "backup_manifest_bad.json"
+        bad_path.write_text("{invalid json!!!")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        good_manifest = {"timestamp": now_iso, "app_version": "1.0.0"}
+        good_path = backups_dir / "backup_manifest_good.json"
+        good_path.write_text(json.dumps(good_manifest))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["latest_manifest"] == "backup_manifest_good.json"
+        assert data["skipped_manifest_count"] == 1
+        assert data["checked_manifest_count"] == 1
+        output_text = result.stdout
+        assert str(backups_dir) not in output_text
+        assert str(tmpdir) not in output_text
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_all_bad_json_exits_1():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        bad1 = backups_dir / "backup_manifest_bad1.json"
+        bad1.write_text("not json at all")
+        bad2 = backups_dir / "backup_manifest_bad2.json"
+        bad2.write_text("{broken")
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["latest_manifest"] is None
+        assert data["skipped_manifest_count"] == 2
+        assert data["checked_manifest_count"] == 0
+        output_text = result.stdout
+        assert str(backups_dir) not in output_text
+        assert str(tmpdir) not in output_text
+        for w in data["warnings"]:
+            assert "\\" not in w or "backup_manifest_" in w
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_allow_missing_manifest_does_not_mask_all_bad():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        bad1 = backups_dir / "backup_manifest_bad1.json"
+        bad1.write_text("not json")
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--allow-missing-manifest"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is False
+        assert data["latest_manifest"] is None
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_invalid_timestamp_uses_mtime_fallback():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        manifest_bad_ts = {"timestamp": "not-a-real-timestamp", "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_invalid_ts.json"
+        manifest_path.write_text(json.dumps(manifest_bad_ts))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["timestamp_source"] == "mtime_fallback"
+        assert len(data["warnings"]) > 0
+        assert any("mtime fallback" in w for w in data["warnings"])
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
+def test_backup_freshness_invalid_timestamp_warning_has_filename_no_abs_path():
+    project_root = _get_project_root()
+    script = project_root / "scripts" / "check_backup_freshness.py"
+    if not script.exists():
+        pytest.skip("check_backup_freshness.py not found")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backups_dir = Path(tmpdir) / "backups"
+        backups_dir.mkdir()
+
+        manifest_bad_ts = {"timestamp": "garbage-value", "app_version": "1.0.0"}
+        manifest_path = backups_dir / "backup_manifest_invalid_ts2.json"
+        manifest_path.write_text(json.dumps(manifest_bad_ts))
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--backups-dir", str(backups_dir), "--max-age-hours", "24"],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        fallback_warnings = [w for w in data["warnings"] if "mtime fallback" in w]
+        assert len(fallback_warnings) > 0
+        for w in fallback_warnings:
+            assert "backup_manifest_invalid_ts2.json" in w
+            assert str(backups_dir) not in w
+            assert str(tmpdir) not in w
+
+
+@pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")
 def test_ops_check_script_exists():
     project_root = _get_project_root()
     ops_check = project_root / "scripts" / "ops_check.ps1"
@@ -994,7 +1335,7 @@ def test_ops_check_no_confirm_restore():
     ops_check = project_root / "scripts" / "ops_check.ps1"
     if not ops_check.exists():
         pytest.skip("ops_check.ps1 not found")
-    content = ops_check.read_text()
+    content = ops_check.read_text(encoding="utf-8")
     assert "ConfirmRestore" not in content, "ops_check.ps1 must not contain ConfirmRestore"
 
 
@@ -1004,7 +1345,7 @@ def test_ops_check_no_backup_or_restore():
     ops_check = project_root / "scripts" / "ops_check.ps1"
     if not ops_check.exists():
         pytest.skip("ops_check.ps1 not found")
-    content = ops_check.read_text()
+    content = ops_check.read_text(encoding="utf-8")
     forbidden = ["backup_all", "restore_all", "restore_postgres", "restore_storage"]
     for word in forbidden:
         assert word not in content, f"ops_check.ps1 must not execute {word}"
@@ -1023,7 +1364,7 @@ def test_operations_monitoring_doc_no_secrets():
     doc = project_root / "docs" / "OPERATIONS_MONITORING.md"
     if not doc.exists():
         pytest.skip("OPERATIONS_MONITORING.md not found")
-    content = doc.read_text()
+    content = doc.read_text(encoding="utf-8")
     for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
         match = pat.search(content)
         assert not match, f"OPERATIONS_MONITORING.md contains secret-like value: {match.group()[:20]}..."
@@ -1037,7 +1378,7 @@ def test_ops_check_no_auth_register_or_login():
     ops_check = project_root / "scripts" / "ops_check.ps1"
     if not ops_check.exists():
         pytest.skip("ops_check.ps1 not found")
-    content = ops_check.read_text()
+    content = ops_check.read_text(encoding="utf-8")
     assert "auth/register" not in content, "ops_check.ps1 must not call /auth/register"
     assert "auth/login" not in content, "ops_check.ps1 must not call /auth/login"
 
@@ -1048,7 +1389,7 @@ def test_ops_check_no_post_methods():
     ops_check = project_root / "scripts" / "ops_check.ps1"
     if not ops_check.exists():
         pytest.skip("ops_check.ps1 not found")
-    content = ops_check.read_text()
+    content = ops_check.read_text(encoding="utf-8")
     assert "-Method POST" not in content, "ops_check.ps1 must not use -Method POST"
     assert "Invoke-RestMethod -Method POST" not in content, "ops_check.ps1 must not use Invoke-RestMethod -Method POST"
     assert "Invoke-WebRequest -Method POST" not in content, "ops_check.ps1 must not use Invoke-WebRequest -Method POST"
@@ -1060,7 +1401,7 @@ def test_ops_check_no_state_writes():
     ops_check = project_root / "scripts" / "ops_check.ps1"
     if not ops_check.exists():
         pytest.skip("ops_check.ps1 not found")
-    content = ops_check.read_text()
+    content = ops_check.read_text(encoding="utf-8")
     forbidden_writes = [
         "ConvertTo-Json",
         "SessionVariable",
@@ -1084,7 +1425,7 @@ def test_v1_0_1_backlog_no_secrets():
     backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
     if not backlog.exists():
         pytest.skip("V1_0_1_BACKLOG.md not found")
-    content = backlog.read_text()
+    content = backlog.read_text(encoding="utf-8")
     for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
         match = pat.search(content)
         assert not match, f"V1_0_1_BACKLOG.md contains secret-like value: {match.group()[:20]}..."
@@ -1098,7 +1439,7 @@ def test_v1_0_1_backlog_contains_priority_levels():
     backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
     if not backlog.exists():
         pytest.skip("V1_0_1_BACKLOG.md not found")
-    content = backlog.read_text()
+    content = backlog.read_text(encoding="utf-8")
     for level in ["P0", "P1", "P2", "P3"]:
         assert level in content, f"V1_0_1_BACKLOG.md must contain {level} section"
 
@@ -1109,7 +1450,7 @@ def test_v1_0_1_backlog_contains_required_items():
     backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
     if not backlog.exists():
         pytest.skip("V1_0_1_BACKLOG.md not found")
-    content = backlog.read_text().lower()
+    content = backlog.read_text(encoding="utf-8").lower()
     required_items = [
         "playwright",
         "backup freshness",
@@ -1134,7 +1475,7 @@ def test_post_release_issue_template_no_secrets():
     template = project_root / "docs" / "POST_RELEASE_ISSUE_TEMPLATE.md"
     if not template.exists():
         pytest.skip("POST_RELEASE_ISSUE_TEMPLATE.md not found")
-    content = template.read_text()
+    content = template.read_text(encoding="utf-8")
     for pat in [re.compile(r'sk-[a-zA-Z0-9]{20,}'), re.compile(r'tp-[a-zA-Z0-9]{20,}')]:
         match = pat.search(content)
         assert not match, f"POST_RELEASE_ISSUE_TEMPLATE.md contains secret-like value: {match.group()[:20]}..."
@@ -1146,7 +1487,7 @@ def test_post_release_issue_template_no_secrets():
 def test_readme_links_v1_0_1_backlog():
     project_root = _get_project_root()
     readme = project_root / "README.md"
-    content = readme.read_text()
+    content = readme.read_text(encoding="utf-8")
     assert "V1_0_1_BACKLOG" in content, "README.md must link to V1_0_1_BACKLOG.md"
 
 
@@ -1156,7 +1497,7 @@ def test_env_example_documents_production_https_cookie():
     env_example = project_root / ".env.example"
     if not env_example.exists():
         pytest.skip(".env.example not found")
-    content = env_example.read_text()
+    content = env_example.read_text(encoding="utf-8")
     assert "SESSION_COOKIE_SECURE" in content, ".env.example must document SESSION_COOKIE_SECURE"
     assert "ENV=" in content or "ENV=" in content, ".env.example must document ENV variable"
     has_https_hint = "HTTPS" in content or "https" in content
@@ -1169,5 +1510,5 @@ def test_v1_0_1_backlog_marks_cors_cookie_item():
     backlog = project_root / "docs" / "V1_0_1_BACKLOG.md"
     if not backlog.exists():
         pytest.skip("V1_0_1_BACKLOG.md not found")
-    content = backlog.read_text()
+    content = backlog.read_text(encoding="utf-8")
     assert "Phase 50" in content, "V1_0_1_BACKLOG.md must mark CORS/cookie item with Phase 50"

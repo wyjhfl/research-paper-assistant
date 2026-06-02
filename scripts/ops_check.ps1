@@ -70,7 +70,12 @@ Invoke-Check "Backend /health/ready" {
 
 Invoke-Check "Job worker health" {
     try {
-        $health = Invoke-RestMethod -Uri "http://localhost:8091/jobs/worker/health" -TimeoutSec 10 -ErrorAction Stop
+        $headers = @{}
+        $opsToken = $env:OPS_TOKEN
+        if ($opsToken) {
+            $headers["X-Ops-Token"] = $opsToken
+        }
+        $health = Invoke-RestMethod -Uri "http://localhost:8091/jobs/worker/health" -TimeoutSec 10 -Headers $headers -ErrorAction Stop
         "worker_enabled: $($health.worker_enabled), stale_running_count: $($health.stale_running_count), pending_count: $($health.pending_count), failed_count: $($health.failed_count)"
         if ($health.stale_running_count -gt 0) {
             Write-Host "WARN: stale_running_count > 0" -ForegroundColor Yellow

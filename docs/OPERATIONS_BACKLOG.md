@@ -34,23 +34,45 @@
 - 落地：纳入 ops_check.ps1 + OPERATIONS_MONITORING 告警条件
 - v1.0.1 增强：ops token 只读认证方案
 
-### 4. backup freshness 告警 ✅ Phase 48 📋 v1.0.1 #6
+### 4. backup freshness 告警 ✅ Phase 48 / Phase 4 📋 v1.0.1 #6
 
 - 频率：每小时检查（建议）；每日（ops_check）
 - 条件：最新 backup manifest 超过 24 小时
 - 方式：`python scripts/check_backup_freshness.py --max-age-hours 24`
-- 告警：邮件 / Slack / 企业微信
+- 告警：邮件 / Slack / 企业微信 / GitHub Actions workflow failure
 - 落地：check_backup_freshness.py 脚本 + OPERATIONS_MONITORING 每日检查
-- v1.0.1 增强：GitHub Actions scheduled workflow 定时化
+- Phase 4 增强：GitHub Actions workflow `backup-freshness.yml` 每日 00:30 UTC + workflow_dispatch
+- 默认 schedule 不执行，需 `BACKUP_FRESHNESS_ENABLED=true` repository variable 启用
+- 生产前提：self-hosted runner 或外部监控环境能访问备份 manifest 目录
+- `_parse_manifest_timestamp` 支持 `yyyyMMdd_HHmmssZ`（backup_all.ps1 格式）
+- 按 manifest `timestamp` 字段选择最新 manifest（不按文件 mtime），timestamp 缺失/非法才 fallback mtime
+- 损坏 JSON manifest 跳过并在 warnings 中记录文件名；全部损坏则 `ok=false`、exit 1
+- `_try_parse_timestamp` 替代 `_parse_manifest_timestamp`，非法 timestamp 精确标记为 mtime_fallback
+
+### 4a. RC Evidence Pack ✅ Phase 5 📋 v1.0.1 #6a
+
+- 新增 `scripts/collect_rc_evidence.py`，只读收集仓库状态和门禁结果摘要
+- 输出到 `artifacts/rc/`（已 gitignored），JSON + Markdown 摘要
+- 证据不得包含：.env 内容、API key、Authorization、DATABASE_URL 真实值、session token、artifacts 内容、宿主机绝对路径
+- 不执行 backup、restore、cleanup --confirm、docker compose up、真实模型 eval
+- 不是 CI 自动上传，是本地/人工 RC 流程
+
+### 4b. Pre-Tag Check ✅ Phase 6 📋 v1.0.1 #6b
+
+- 新增 `scripts/pre_tag_check.py`，只读检查打 tag 前条件
+- 检查项：release notes 存在、evidence 脚本存在、artifacts/rc gitignored、.env 未跟踪、scanner 通过、workflow 安全、version 一致
+- 不创建 tag、不 push、不执行 destructive 操作
+- APP_VERSION 更新为 1.0.1-rc.1，同步 config.py、.env.example、API_CONTRACT.md
+- 新增 docs/RELEASE_NOTES_v1.0.1-rc.1.md
 
 ## 中优先级
 
-### 5. Playwright CI 专用 job 📋 v1.0.1 #4
+### 5. Playwright CI 专用 job ✅ Phase 3 📋 v1.0.1 #4
 
-- 在 CI 中增加 `e2e` job
-- 需要：启动 Next.js dev server + 安装 Playwright 浏览器
-- 资源需求：比其他 job 更重，建议独立运行
-- 参考：`apps/web/playwright.config.ts` 中 `webServer` 配置
+- 在 CI 中增加 `frontend-e2e` job
+- 已实现：Node 22 + npm ci + playwright install --with-deps chromium + npm run test:e2e
+- 触发条件：push main / workflow_dispatch run_e2e=true
+- 不在 PR 默认运行（v1.0.1 patch 阶段控制成本和 flaky 风险）
 
 ### 6. 定期 storage_audit ✅ Phase 48 📋 v1.0.1 #3
 
@@ -80,11 +102,13 @@
 - 自动创建 PR 更新 npm/pip 依赖
 - 需要人工 review 后合并
 
-### 10. 全量 pytest CI job 📋 v1.0.1 #5
+### 10. 全量 pytest CI job ✅ Phase 3 📋 v1.0.1 #5
 
 - 在 CI 中启动 PostgreSQL service container
-- 运行全量 pytest（453+ tests）
-- 资源需求较重，建议仅在 main 分支 push 时运行
+- 已实现：`backend-integration` job，使用 docker-compose.ci.yml 覆盖 env_file
+- CI 不读取 .env，使用 local provider
+- 显式 DB 集成测试列表（非全量 pytest tests/）
+- 触发条件：push main / workflow_dispatch run_backend_integration=true
 
 ### 11. 性能基准测试 📋 v1.0.1 #11
 

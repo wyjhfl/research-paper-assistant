@@ -234,6 +234,7 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 63. **stale job 告警不得自动修复**：巡检发现 `stale_running_count > 0` 时只能输出 WARN，不得自动重置 job 状态、删除 job 或执行任何修复操作。修复需人工判断后手动执行。
 64. **issue/report 不得包含 .env、API key、完整日志 secret**：问题报告（POST_RELEASE_ISSUE_TEMPLATE）中不得粘贴 `.env` 内容、真实 API Key（sk-/tp- 前缀）、DATABASE_URL 真实值、Authorization header、session token。敏感信息必须用 `<REDACTED>` 替换。
 65. **v1.0.1 只能修复明确问题，不把大功能塞进 patch release**：v1.0.1 是 patch 版本，只修复 P0/P1 级明确问题。P2/P3 项和新增功能应排到 v1.1.0 或 v2.0.0。
+66. **Windows PATH 含中文路径会导致 git 不可用**：Git 安装在含中文字符的路径（如 `D:\codex安装\tools\Git\cmd`）时，Windows 系统 PATH 中的中文可能被编码损坏（如 `锟斤拷装`），导致 `shutil.which("git")` 返回 None、PowerShell 找不到 git。所有 Python 脚本中需要调用 git 的地方必须使用 `resolve_git()` 函数（`shutil.which` → `winreg` 注册表回退 → `ProgramFiles` 常见路径 → PATH 扫描修复），不能硬编码 `"git"` 或绝对路径。`resolve_git()` 已在 `pre_tag_check.py` 和 `collect_rc_evidence.py` 中实现，新增脚本如需调用 git 必须复用此模式。
 
 ## 八、Review Checklist
 
@@ -287,3 +288,4 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 - [ ] v1.0.1 backlog 条目是否正确分级 P0/P1/P2/P3？（P0=生产阻塞，P1=高优先级修复，P2=体验增强，P3=后续功能）
 - [ ] v1.0.1 backlog 条目是否有复现和验证路径？（每个条目必须有验证条件）
 - [ ] issue/report 是否包含 .env / API key / 完整日志 secret？（不得包含，必须用 `<REDACTED>` 替换）
+- [ ] Python 脚本中是否硬编码 `"git"` 调用？（必须使用 `resolve_git()` 函数，不能依赖 PATH 中 git 可用）

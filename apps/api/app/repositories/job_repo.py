@@ -124,6 +124,17 @@ class JobRepository:
             counts[status] = count
         return counts
 
+    async def count_global_by_status(self) -> dict[str, int]:
+        stmt = (
+            select(JobRun.status, func.count(JobRun.job_id))
+            .group_by(JobRun.status)
+        )
+        result = await self.db.execute(stmt)
+        counts: dict[str, int] = {}
+        for status, count in result.all():
+            counts[status] = count
+        return counts
+
     async def count_stale_running(self, user_id: str, stale_seconds: int) -> int:
         cutoff = datetime.now(timezone.utc).timestamp() - stale_seconds
         stmt = select(func.count(JobRun.job_id)).where(
@@ -137,6 +148,19 @@ class JobRepository:
                     JobRun.user_id == user_id,
                     JobRun.status == "running",
                 )
+            )).scalars().all()
+        )
+        stale_count = 0
+        for job in all_running:
+            if job.locked_at and job.locked_at.timestamp() < cutoff:
+                stale_count += 1
+        return stale_count
+
+    async def count_global_stale_running(self, stale_seconds: int) -> int:
+        cutoff = datetime.now(timezone.utc).timestamp() - stale_seconds
+        all_running = list(
+            (await self.db.execute(
+                select(JobRun).where(JobRun.status == "running")
             )).scalars().all()
         )
         stale_count = 0

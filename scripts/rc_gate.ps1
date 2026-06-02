@@ -7,6 +7,127 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+$SENSITIVE_PATTERNS = @(
+    "API_KEY", "SECRET", "TOKEN", "AUTHORIZATION",
+    "DATABASE_URL", "password", "sk-",
+    "postgresql\+asyncpg://"
+)
+
+function Write-Step {
+    param([string]$Label)
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "  $Label" -ForegroundColor Cyan
+    Write-Host "============================================================" -ForegroundColor Cyan
+}
+
+function Write-Fail {
+    param([string]$Msg)
+    Write-Host "  FAILED: $Msg" -ForegroundColor Red
+}
+
+function Write-Ok {
+    param([string]$Msg)
+    Write-Host "  $Msg" -ForegroundColor Green
+}
+
+function Test-PythonCandidate {
+    param([string]$Exe, [string[]]$Args)
+    $cmd = Get-Command $Exe -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $null = & $Exe @($Args + @("--version")) 2>&1
+        if ($LASTEXITCODE -eq 0) { return $true }
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+    return $false
+}
+
+function Resolve-PythonCommand {
+    if (Test-PythonCandidate -Exe "python" -Args @()) {
+        return [PSCustomObject]@{ Exe = "python"; Args = @() }
+    }
+    if (Test-PythonCandidate -Exe "py" -Args @("-3")) {
+        return [PSCustomObject]@{ Exe = "py"; Args = @("-3") }
+    }
+    Write-Host "ERROR: Python was not found. Install Python or add it to PATH." -ForegroundColor Red
+    exit 1
+}
+
+function Invoke-PythonSafeCommand {
+    param(
+        [string[]]$PythonArgs,
+        [string]$ErrorMessage
+    )
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $allArgs = $Python.Args + $PythonArgs
+    $output = & $Python.Exe @allArgs 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+
+    foreach ($line in $output) {
+        $lineStr = $line.ToString()
+        $skip = $false
+        foreach ($pat in $SENSITIVE_PATTERNS) {
+            if ($lineStr -match $pat) {
+                $skip = $true
+                break
+            }
+        }
+        if (-not $skip) {
+            Write-Host "  $lineStr"
+        }
+    }
+
+    if ($exitCode -ne 0) {
+        Write-Fail "$ErrorMessage (exit code: $exitCode)"
+        exit 1
+    }
+}
+
+function Invoke-SafeCommand {
+    param(
+        [scriptblock]$Command,
+        [string]$ErrorMessage
+    )
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $output = & $Command 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+
+    foreach ($line in $output) {
+        $lineStr = $line.ToString()
+        $skip = $false
+        foreach ($pat in $SENSITIVE_PATTERNS) {
+            if ($lineStr -match $pat) {
+                $skip = $true
+                break
+            }
+        }
+        if (-not $skip) {
+            Write-Host "  $lineStr"
+        }
+    }
+
+    if ($exitCode -ne 0) {
+        Write-Fail "$ErrorMessage (exit code: $exitCode)"
+        exit 1
+    }
+}
+
+$projectRoot = (Get-Item (Join-Path $PSScriptRoot "..")).FullName
+Set-Location $projectRoot
+
+$Python = Resolve-PythonCommand
+
 $step = 0
 $totalSteps = 7
 if ($SkipBackendTests) { $totalSteps-- }
@@ -15,83 +136,73 @@ if ($SkipE2E) { $totalSteps-- }
 if ($SkipProductionCheck) { $totalSteps-- }
 if ($ManifestPath) { $totalSteps += 2 }
 
-function Invoke-Step {
-    param([string]$Name, [scriptblock]$Action)
-    $script:step++
-    Write-Host ""
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "  [$script:step/$totalSteps] $Name" -ForegroundColor Cyan
-    Write-Host "============================================================" -ForegroundColor Cyan
-    try {
-        & $Action
-        Write-Host "$Name passed" -ForegroundColor Green
-    } catch {
-        Write-Host "ERROR: $Name failed" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
-        exit 1
-    }
-}
+$step++
+Write-Step "[$step/$totalSteps] Documentation secret scan"
+Invoke-PythonSafeCommand -PythonArgs @("scripts/check_docs_secrets.py") -ErrorMessage "Secret scan failed"
+Write-Ok "Documentation secret scan passed"
 
-$projectRoot = (Get-Item (Join-Path $PSScriptRoot "..")).FullName
-Set-Location $projectRoot
-
-Invoke-Step "Documentation secret scan" {
-    $result = & python scripts/check_docs_secrets.py 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Secret scan failed" }
-    Write-Host $result
-}
-
-Invoke-Step "Frontend mojibake scan" {
-    $result = & python scripts/check_frontend_mojibake.py 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Mojibake scan failed" }
-    Write-Host $result
-}
+$step++
+Write-Step "[$step/$totalSteps] Frontend mojibake scan"
+Invoke-PythonSafeCommand -PythonArgs @("scripts/check_frontend_mojibake.py") -ErrorMessage "Mojibake scan failed"
+Write-Ok "Frontend mojibake scan passed"
 
 if (-not $SkipProductionCheck) {
-    Invoke-Step "Production check" {
-        $result = & docker compose exec -T backend python scripts/production_check.py 2>&1
-        Write-Host $result
-        if ($LASTEXITCODE -ne 0) { throw "Production check failed (exit $LASTEXITCODE)" }
-    }
+    $step++
+    Write-Step "[$step/$totalSteps] Production check"
+    Invoke-SafeCommand -Command { docker compose exec -T backend python scripts/production_check.py } -ErrorMessage "Production check failed"
+    Write-Ok "Production check passed"
 }
 
-Invoke-Step "Alembic current" {
-    $proc = Start-Process -FilePath "docker" -ArgumentList "compose","exec","-T","backend","python","-m","alembic","current" -NoNewWindow -Wait -PassThru -RedirectStandardOutput (Join-Path $env:TEMP "rc_alembic_out.txt") -RedirectStandardError (Join-Path $env:TEMP "rc_alembic_err.txt")
-    Get-Content (Join-Path $env:TEMP "rc_alembic_out.txt"), (Join-Path $env:TEMP "rc_alembic_err.txt") | Write-Host
-    if ($proc.ExitCode -ne 0) { throw "Alembic check failed (exit $($proc.ExitCode))" }
+$step++
+Write-Step "[$step/$totalSteps] Alembic current"
+$alembicOutFile = Join-Path $env:TEMP "rc_alembic_out.txt"
+$alembicErrFile = Join-Path $env:TEMP "rc_alembic_err.txt"
+$proc = Start-Process -FilePath "docker" -ArgumentList "compose","exec","-T","backend","python","-m","alembic","current" -NoNewWindow -Wait -PassThru -RedirectStandardOutput $alembicOutFile -RedirectStandardError $alembicErrFile
+foreach ($file in @($alembicOutFile, $alembicErrFile)) {
+    if (Test-Path $file) {
+        foreach ($line in Get-Content $file) {
+            $skip = $false
+            foreach ($pat in $SENSITIVE_PATTERNS) {
+                if ($line -match $pat) { $skip = $true; break }
+            }
+            if (-not $skip) { Write-Host "  $line" }
+        }
+    }
 }
+if ($proc.ExitCode -ne 0) {
+    Write-Fail "Alembic check failed (exit code: $($proc.ExitCode))"
+    exit 1
+}
+Write-Ok "Alembic current passed"
 
 if (-not $SkipBackendTests) {
-    Invoke-Step "Backend tests (pytest)" {
-        $result = & docker compose exec -T backend python -m pytest tests/ -q 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Backend tests failed" }
-        Write-Host $result
-    }
+    $step++
+    Write-Step "[$step/$totalSteps] Backend tests (pytest)"
+    Invoke-SafeCommand -Command { docker compose exec -T backend python -m pytest tests/ -q } -ErrorMessage "Backend tests failed"
+    Write-Ok "Backend tests passed"
 }
 
 if (-not $SkipFrontendBuild) {
-    Invoke-Step "Frontend build" {
-        try {
-            Push-Location "apps/web"
-            $result = & npm run build 2>&1 | Out-String
-            if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
-            Write-Host $result
-        } finally {
-            Pop-Location
-        }
+    $step++
+    Write-Step "[$step/$totalSteps] Frontend build"
+    try {
+        Push-Location "apps/web"
+        Invoke-SafeCommand -Command { npm run build } -ErrorMessage "Frontend build failed"
+        Write-Ok "Frontend build passed"
+    } finally {
+        Pop-Location
     }
 }
 
 if (-not $SkipE2E) {
-    Invoke-Step "E2E tests (Playwright)" {
-        try {
-            Push-Location "apps/web"
-            $result = & npx playwright test 2>&1 | Out-String
-            if ($LASTEXITCODE -ne 0) { throw "E2E tests failed" }
-            Write-Host $result
-        } finally {
-            Pop-Location
-        }
+    $step++
+    Write-Step "[$step/$totalSteps] E2E tests (Playwright)"
+    try {
+        Push-Location "apps/web"
+        Invoke-SafeCommand -Command { npx playwright test } -ErrorMessage "E2E tests failed"
+        Write-Ok "E2E tests passed"
+    } finally {
+        Pop-Location
     }
 }
 
@@ -106,17 +217,15 @@ if ($ManifestPath) {
         exit 1
     }
 
-    Invoke-Step "Validate backup manifest" {
-        $result = & docker compose exec -T backend python scripts/validate_backup_manifest.py $ManifestPath 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Manifest validation failed" }
-        Write-Host $result
-    }
+    $step++
+    Write-Step "[$step/$totalSteps] Validate backup manifest"
+    Invoke-SafeCommand -Command { docker compose exec -T backend python scripts/validate_backup_manifest.py $ManifestPath } -ErrorMessage "Manifest validation failed"
+    Write-Ok "Manifest validation passed"
 
-    Invoke-Step "Restore dry-run" {
-        $result = & powershell -ExecutionPolicy Bypass -File "scripts\restore_all.ps1" -ManifestPath $ManifestPath -DryRun 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Restore dry-run failed" }
-        Write-Host $result
-    }
+    $step++
+    Write-Step "[$step/$totalSteps] Restore dry-run"
+    Invoke-SafeCommand -Command { powershell -ExecutionPolicy Bypass -File "scripts\restore_all.ps1" -ManifestPath $ManifestPath -DryRun } -ErrorMessage "Restore dry-run failed"
+    Write-Ok "Restore dry-run passed"
 }
 
 Write-Host ""

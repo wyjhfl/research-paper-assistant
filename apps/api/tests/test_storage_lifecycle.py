@@ -14,6 +14,17 @@ from httpx import ASGITransport, AsyncClient
 from app.config import settings
 
 
+def _make_mock_session(mock_session_cls, execute_return):
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session_cls.return_value = mock_session
+    mock_result = MagicMock()
+    mock_result.all.return_value = execute_return
+    mock_session.execute.return_value = mock_result
+    return mock_session
+
+
 @pytest.mark.asyncio
 async def test_storage_audit_identifies_orphan():
     from scripts.storage_audit import run_audit
@@ -25,14 +36,7 @@ async def test_storage_audit_identifies_orphan():
 
         with patch("scripts.storage_audit.settings.STORAGE_PATH", tmpdir), \
              patch("scripts.storage_audit.async_session") as mock_session_cls:
-            mock_session = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock(return_value=False)
-            mock_session_cls.return_value = mock_session
-
-            mock_result = MagicMock()
-            mock_result.all.return_value = [(str(storage / "referenced.pdf"), "referenced.pdf")]
-            mock_session.execute.return_value = mock_result
+            _make_mock_session(mock_session_cls, [(str(storage / "referenced.pdf"), "referenced.pdf")])
 
             result = await run_audit()
             assert result["orphan_count"] >= 1
@@ -48,14 +52,7 @@ async def test_storage_audit_identifies_missing():
 
         with patch("scripts.storage_audit.settings.STORAGE_PATH", tmpdir), \
              patch("scripts.storage_audit.async_session") as mock_session_cls:
-            mock_session = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock(return_value=False)
-            mock_session_cls.return_value = mock_session
-
-            mock_result = MagicMock()
-            mock_result.all.return_value = [(str(storage / "nonexistent.pdf"), "nonexistent.pdf")]
-            mock_session.execute.return_value = mock_result
+            _make_mock_session(mock_session_cls, [(str(storage / "nonexistent.pdf"), "nonexistent.pdf")])
 
             result = await run_audit()
             assert result["missing_count"] >= 1
@@ -79,6 +76,42 @@ async def test_storage_audit_missing_path_returns_all_fields():
 
 
 @pytest.mark.asyncio
+async def test_storage_audit_is_read_only():
+    from scripts.storage_audit import run_audit
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        (storage / "orphan.pdf").write_bytes(b"orphan data")
+
+        with patch("scripts.storage_audit.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.storage_audit.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_audit()
+            assert result["orphan_count"] >= 1
+            assert (storage / "orphan.pdf").exists()
+            assert (storage / "orphan.pdf").read_bytes() == b"orphan data"
+
+
+@pytest.mark.asyncio
+async def test_storage_audit_no_absolute_paths():
+    from scripts.storage_audit import run_audit
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        (storage / "file.pdf").write_bytes(b"data")
+
+        with patch("scripts.storage_audit.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.storage_audit.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(str(storage / "file.pdf"), "file.pdf")])
+
+            result = await run_audit()
+            output = json.dumps(result)
+            assert tmpdir not in output
+            assert str(storage) not in output
+
+
+@pytest.mark.asyncio
 async def test_cleanup_storage_dry_run_no_delete():
     from scripts.cleanup_storage import run_cleanup
 
@@ -89,18 +122,12 @@ async def test_cleanup_storage_dry_run_no_delete():
 
         with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
              patch("scripts.cleanup_storage.async_session") as mock_session_cls:
-            mock_session = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock(return_value=False)
-            mock_session_cls.return_value = mock_session
-
-            mock_result = MagicMock()
-            mock_result.all.return_value = []
-            mock_session.execute.return_value = mock_result
+            _make_mock_session(mock_session_cls, [])
 
             result = await run_cleanup(dry_run=True)
             assert result["dry_run"] is True
-            assert result["deleted_count"] >= 1
+            assert result["deleted_count"] == 0
+            assert result["candidate_count"] >= 1
             assert orphan_file.exists()
 
 
@@ -117,18 +144,59 @@ async def test_cleanup_storage_confirm_deletes_orphan():
 
         with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
              patch("scripts.cleanup_storage.async_session") as mock_session_cls:
-            mock_session = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock(return_value=False)
-            mock_session_cls.return_value = mock_session
-
-            mock_result = MagicMock()
-            mock_result.all.return_value = [(str(referenced_file),)]
-            mock_session.execute.return_value = mock_result
+            _make_mock_session(mock_session_cls, [(str(referenced_file),)])
 
             result = await run_cleanup(dry_run=False)
+            assert result["dry_run"] is False
+            assert result["deleted_count"] >= 1
             assert not orphan_file.exists()
             assert referenced_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_referenced_not_deleted():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        ref_file = storage / "important.pdf"
+        ref_file.write_bytes(b"important data")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(str(ref_file),)])
+
+            result = await run_cleanup(dry_run=False)
+            assert result["deleted_count"] == 0
+            assert ref_file.exists()
+            assert ref_file.read_bytes() == b"important data"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_symlink_skipped():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        external_dir = Path(tmpdir + "_external")
+        external_dir.mkdir()
+        external_file = external_dir / "secret.pdf"
+        external_file.write_bytes(b"secret data")
+
+        symlink_path = storage / "link.pdf"
+        try:
+            symlink_path.symlink_to(external_file)
+        except OSError:
+            pytest.skip("symlink not supported on this platform")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=False)
+            assert result["skipped_symlink"] >= 1
+            assert external_file.exists()
+            assert external_file.read_bytes() == b"secret data"
 
 
 @pytest.mark.asyncio
@@ -151,37 +219,170 @@ async def test_cleanup_storage_sibling_prefix_blocked():
 
 
 @pytest.mark.asyncio
-async def test_cleanup_storage_symlink_skipped():
+async def test_cleanup_storage_path_violation_candidate_skipped():
     from scripts.cleanup_storage import run_cleanup
 
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = Path(tmpdir)
-        external_dir = Path(tmpdir + "_external")
-        external_dir.mkdir()
-        external_file = external_dir / "secret.pdf"
-        external_file.write_bytes(b"secret data")
 
-        symlink_path = storage / "link.pdf"
-        try:
-            symlink_path.symlink_to(external_file)
-        except OSError:
-            pytest.skip("symlink not supported on this platform")
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls, \
+             patch("scripts.cleanup_storage._is_within_storage", return_value=False):
+            _make_mock_session(mock_session_cls, [])
+
+            (storage / "trapped.pdf").write_bytes(b"x")
+            result = await run_cleanup(dry_run=True)
+            assert result["skipped_path_violation"] >= 1
+            assert result["candidate_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_missing_path_returns_safe_json():
+    from scripts.cleanup_storage import run_cleanup
+
+    with patch("scripts.cleanup_storage.settings.STORAGE_PATH", "/nonexistent/path/that/does/not/exist"):
+        result = await run_cleanup(dry_run=True)
+
+    assert result["storage_path_exists"] is False
+    assert result["orphan_count"] == 0
+    assert result["candidate_count"] == 0
+    assert result["deleted_count"] == 0
+    assert result["skipped_path_violation"] == 0
+    assert result["skipped_symlink"] == 0
+    assert result["error_count"] == 0
+    assert result["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_no_absolute_paths_in_output():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        (storage / "orphan.pdf").write_bytes(b"data")
 
         with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
              patch("scripts.cleanup_storage.async_session") as mock_session_cls:
-            mock_session = AsyncMock()
-            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock(return_value=False)
-            mock_session_cls.return_value = mock_session
+            _make_mock_session(mock_session_cls, [])
 
-            mock_result = MagicMock()
-            mock_result.all.return_value = []
-            mock_session.execute.return_value = mock_result
+            result = await run_cleanup(dry_run=True)
+            output = json.dumps(result)
+            assert tmpdir not in output
+            assert str(storage) not in output
+            for f in result.get("candidate_files", []):
+                assert not Path(f).is_absolute()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_dry_run_candidate_preview():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        for i in range(5):
+            (storage / f"orphan_{i:03d}.pdf").write_bytes(b"x")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=True, preview_limit=3)
+            assert result["candidate_count"] == 5
+            assert len(result["candidate_files"]) == 3
+            assert result["preview_truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_dry_run_preview_not_truncated():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        (storage / "orphan.pdf").write_bytes(b"data")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=True, preview_limit=100)
+            assert result["preview_truncated"] is False
+            assert len(result["candidate_files"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_delete_error_recorded():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        (storage / "orphan.pdf").write_bytes(b"data")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls, \
+             patch("scripts.cleanup_storage.Path.unlink", side_effect=OSError("permission denied")):
+            _make_mock_session(mock_session_cls, [])
 
             result = await run_cleanup(dry_run=False)
-            assert result["skipped_symlink"] >= 1
-            assert external_file.exists()
-            assert external_file.read_bytes() == b"secret data"
+            assert result["error_count"] >= 1
+            assert len(result["errors"]) >= 1
+            assert "orphan.pdf" in result["errors"][0]
+            assert tmpdir not in result["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_limit_parameter():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        for i in range(5):
+            (storage / f"orphan_{i:03d}.pdf").write_bytes(b"x")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=True, limit=2)
+            assert result["orphan_count"] == 5
+            assert result["candidate_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_confirm_limit_parameter():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        for i in range(5):
+            (storage / f"orphan_{i:03d}.pdf").write_bytes(b"x")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=False, limit=2)
+            assert result["orphan_count"] == 5
+            assert result["deleted_count"] == 2
+            remaining = list(storage.glob("orphan_*.pdf"))
+            assert len(remaining) == 3
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_does_not_delete_directories():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir)
+        sub_dir = storage / "subdir"
+        sub_dir.mkdir()
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", tmpdir), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [])
+
+            result = await run_cleanup(dry_run=False)
+            assert sub_dir.exists()
+            assert result["deleted_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -361,3 +562,234 @@ def test_maintenance_scripts_check():
     result = _check_maintenance_scripts()
     assert result.status == "PASS"
     assert "all present" in result.message
+
+
+def test_ops_check_no_cleanup_confirm():
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text()
+    assert "cleanup_storage.py --confirm" not in content
+    assert "--confirm" not in content
+
+
+def test_production_check_no_cleanup_confirm():
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    prod_check = project_root / "apps" / "api" / "scripts" / "production_check.py"
+    if not prod_check.exists():
+        pytest.skip("production_check.py not found")
+    content = prod_check.read_text()
+    assert "cleanup_storage.py --confirm" not in content
+    assert "cleanup_storage" not in content or "--confirm" not in content
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_absolute_file_path_referenced():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"referenced")
+        orphan_file = storage / "orphan.pdf"
+        orphan_file.write_bytes(b"orphan")
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", str(storage)), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(str(ref_file),)])
+
+            result = await run_cleanup(dry_run=False)
+            assert ref_file.exists()
+            assert not orphan_file.exists()
+            assert result["deleted_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_relative_file_path_with_storage_prefix():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"referenced")
+        orphan_file = storage / "orphan.pdf"
+        orphan_file.write_bytes(b"orphan")
+
+        relative_path = "storage/uploads/default/ref.pdf"
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", str(storage)), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(relative_path,)])
+
+            result = await run_cleanup(dry_run=False)
+            assert ref_file.exists(), "referenced file with storage/ prefix should not be deleted"
+            assert not orphan_file.exists()
+            assert result["deleted_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_relative_file_path_without_storage_prefix():
+    from scripts.cleanup_storage import run_cleanup
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"referenced")
+        orphan_file = storage / "orphan.pdf"
+        orphan_file.write_bytes(b"orphan")
+
+        relative_path = "uploads/default/ref.pdf"
+
+        with patch("scripts.cleanup_storage.settings.STORAGE_PATH", str(storage)), \
+             patch("scripts.cleanup_storage.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(relative_path,)])
+
+            result = await run_cleanup(dry_run=False)
+            assert ref_file.exists(), "referenced file without storage/ prefix should not be deleted"
+            assert not orphan_file.exists()
+            assert result["deleted_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_storage_audit_relative_file_path_not_orphan():
+    from scripts.storage_audit import run_audit
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"referenced")
+
+        relative_path = "uploads/default/ref.pdf"
+
+        with patch("scripts.storage_audit.settings.STORAGE_PATH", str(storage)), \
+             patch("scripts.storage_audit.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(relative_path, "ref.pdf")])
+
+            result = await run_audit()
+            assert result["orphan_count"] == 0, "file referenced by relative path should not be orphan"
+
+
+@pytest.mark.asyncio
+async def test_storage_audit_relative_file_path_with_storage_prefix_not_orphan():
+    from scripts.storage_audit import run_audit
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"referenced")
+
+        relative_path = "storage/uploads/default/ref.pdf"
+
+        with patch("scripts.storage_audit.settings.STORAGE_PATH", str(storage)), \
+             patch("scripts.storage_audit.async_session") as mock_session_cls:
+            _make_mock_session(mock_session_cls, [(relative_path, "ref.pdf")])
+
+            result = await run_audit()
+            assert result["orphan_count"] == 0, "file referenced by storage/ prefix path should not be orphan"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_storage_external_path_returns_none():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+
+        external_dir = Path(tmpdir) / "external"
+        external_dir.mkdir()
+        external_file = external_dir / "file.pdf"
+        external_file.write_bytes(b"x")
+
+        result = _referenced_rel_path(str(external_file), storage)
+        assert result is None
+
+
+def test_referenced_rel_path_absolute_within_storage():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"x")
+
+        result = _referenced_rel_path(str(ref_file), storage)
+        assert result is not None
+        assert result == "uploads/default/ref.pdf"
+        assert not Path(result).is_absolute()
+
+
+def test_referenced_rel_path_relative_with_storage_prefix():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+
+        result = _referenced_rel_path("storage/uploads/default/ref.pdf", storage)
+        assert result is not None
+        assert result == "uploads/default/ref.pdf"
+
+
+def test_referenced_rel_path_relative_without_storage_prefix():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+
+        result = _referenced_rel_path("uploads/default/ref.pdf", storage)
+        assert result is not None
+        assert result == "uploads/default/ref.pdf"
+
+
+def test_referenced_rel_path_external_absolute():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+
+        external_dir = Path(tmpdir) / "external"
+        external_dir.mkdir()
+        external_file = external_dir / "file.pdf"
+        external_file.write_bytes(b"x")
+
+        result = _referenced_rel_path(str(external_file), storage)
+        assert result is None
+
+
+def test_referenced_rel_path_no_absolute_paths_in_output():
+    from scripts.cleanup_storage import _referenced_rel_path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = Path(tmpdir) / "storage"
+        storage.mkdir()
+        uploads_dir = storage / "uploads" / "default"
+        uploads_dir.mkdir(parents=True)
+        ref_file = uploads_dir / "ref.pdf"
+        ref_file.write_bytes(b"x")
+
+        result = _referenced_rel_path(str(ref_file), storage)
+        assert result is not None
+        assert not Path(result).is_absolute()
+        assert str(storage) not in result

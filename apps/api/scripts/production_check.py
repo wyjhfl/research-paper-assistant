@@ -233,7 +233,12 @@ def _check_auth_config() -> CheckResult:
     if settings.SESSION_TTL_SECONDS <= 0:
         return CheckResult("Auth session TTL", "FAIL", "SESSION_TTL_SECONDS must be > 0")
 
-    return CheckResult("Auth config", "PASS", "enabled, dev header disabled")
+    if not settings.OPS_TOKEN:
+        if is_production():
+            return CheckResult("Auth config", "WARN", "production ops worker health token not configured")
+        return CheckResult("Auth config", "PASS", "enabled, dev header disabled")
+
+    return CheckResult("Auth config", "PASS", "enabled, dev header disabled, ops token configured")
 
 
 def _check_job_config() -> list[CheckResult]:

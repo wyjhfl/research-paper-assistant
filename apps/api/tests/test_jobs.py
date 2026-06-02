@@ -124,6 +124,310 @@ async def test_cancel_pending_job_success():
 
 
 @pytest.mark.asyncio
+async def test_ops_token_auth_enabled_no_session_no_token_returns_401():
+    original = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = "test-ops-secret"
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.dependencies.async_session") as mock_session_factory:
+                mock_db = AsyncMock()
+                mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+                with patch("app.services.auth_service.AuthService") as MockAuthService:
+                    mock_auth = AsyncMock()
+                    mock_auth.get_user_from_session = AsyncMock(return_value=None)
+                    MockAuthService.return_value = mock_auth
+                    response = await client.get("/jobs/worker/health")
+    finally:
+        settings.AUTH_ENABLED = original
+        settings.OPS_TOKEN = original_ops
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ops_token_wrong_token_returns_401():
+    original = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = "test-ops-secret"
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.dependencies.async_session") as mock_session_factory:
+                mock_db = AsyncMock()
+                mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+                with patch("app.services.auth_service.AuthService") as MockAuthService:
+                    mock_auth = AsyncMock()
+                    mock_auth.get_user_from_session = AsyncMock(return_value=None)
+                    MockAuthService.return_value = mock_auth
+                    response = await client.get(
+                        "/jobs/worker/health",
+                        headers={"X-Ops-Token": "wrong-token"},
+                    )
+    finally:
+        settings.AUTH_ENABLED = original
+        settings.OPS_TOKEN = original_ops
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ops_token_correct_returns_200():
+    original = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = "test-ops-secret"
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.routers.jobs.JobService") as MockService:
+                mock_instance = AsyncMock()
+                mock_instance.get_worker_health = AsyncMock(return_value={
+                    "worker_enabled": True,
+                    "poll_interval_seconds": 1.0,
+                    "max_attempts_default": 1,
+                    "stale_running_seconds": 900,
+                    "running_count": 5,
+                    "pending_count": 10,
+                    "failed_count": 2,
+                    "stale_running_count": 0,
+                })
+                MockService.return_value = mock_instance
+                response = await client.get(
+                    "/jobs/worker/health",
+                    headers={"X-Ops-Token": "test-ops-secret"},
+                )
+    finally:
+        settings.AUTH_ENABLED = original
+        settings.OPS_TOKEN = original_ops
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["running_count"] == 5
+    assert data["pending_count"] == 10
+
+
+@pytest.mark.asyncio
+async def test_ops_token_cannot_access_jobs_list():
+    original = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = "test-ops-secret"
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.dependencies.async_session") as mock_session_factory:
+                mock_db = AsyncMock()
+                mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+                with patch("app.services.auth_service.AuthService") as MockAuthService:
+                    mock_auth = AsyncMock()
+                    mock_auth.get_user_from_session = AsyncMock(return_value=None)
+                    MockAuthService.return_value = mock_auth
+                    response = await client.get(
+                        "/jobs",
+                        headers={"X-Ops-Token": "test-ops-secret"},
+                    )
+    finally:
+        settings.AUTH_ENABLED = original
+        settings.OPS_TOKEN = original_ops
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ops_token_empty_rejects_any_token():
+    original = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = ""
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.dependencies.async_session") as mock_session_factory:
+                mock_db = AsyncMock()
+                mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+                with patch("app.services.auth_service.AuthService") as MockAuthService:
+                    mock_auth = AsyncMock()
+                    mock_auth.get_user_from_session = AsyncMock(return_value=None)
+                    MockAuthService.return_value = mock_auth
+                    response = await client.get(
+                        "/jobs/worker/health",
+                        headers={"X-Ops-Token": "any-token"},
+                    )
+    finally:
+        settings.AUTH_ENABLED = original
+        settings.OPS_TOKEN = original_ops
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ops_token_uses_global_stats():
+    original_auth = settings.AUTH_ENABLED
+    original_ops = settings.OPS_TOKEN
+    settings.AUTH_ENABLED = True
+    settings.OPS_TOKEN = "test-ops-secret"
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch("app.routers.jobs.JobService") as MockService:
+                mock_instance = AsyncMock()
+                mock_instance.get_worker_health = AsyncMock(return_value={
+                    "worker_enabled": True,
+                    "poll_interval_seconds": 1.0,
+                    "max_attempts_default": 1,
+                    "stale_running_seconds": 900,
+                    "running_count": 100,
+                    "pending_count": 200,
+                    "failed_count": 50,
+                    "stale_running_count": 3,
+                })
+                MockService.return_value = mock_instance
+                response = await client.get(
+                    "/jobs/worker/health",
+                    headers={"X-Ops-Token": "test-ops-secret"},
+                )
+                assert response.status_code == 200
+        mock_instance.get_worker_health.assert_called_once_with(None)
+    finally:
+        settings.AUTH_ENABLED = original_auth
+        settings.OPS_TOKEN = original_ops
+
+
+@pytest.mark.asyncio
+async def test_user_session_uses_user_id_stats():
+    from app.dependencies import get_worker_health_user_id
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        app.dependency_overrides[get_worker_health_user_id] = lambda: "user1"
+        try:
+            with patch("app.routers.jobs.JobService") as MockService:
+                mock_instance = AsyncMock()
+                mock_instance.get_worker_health = AsyncMock(return_value={
+                    "worker_enabled": True,
+                    "poll_interval_seconds": 1.0,
+                    "max_attempts_default": 1,
+                    "stale_running_seconds": 900,
+                    "running_count": 1,
+                    "pending_count": 0,
+                    "failed_count": 0,
+                    "stale_running_count": 0,
+                })
+                MockService.return_value = mock_instance
+                response = await client.get("/jobs/worker/health")
+                assert response.status_code == 200
+        finally:
+            app.dependency_overrides.pop(get_worker_health_user_id, None)
+
+    mock_instance.get_worker_health.assert_called_once_with("user1")
+
+
+def test_ops_token_compare_uses_hmac():
+    import inspect
+    from app.dependencies import get_worker_health_user_id
+    src = inspect.getsource(get_worker_health_user_id)
+    assert "hmac.compare_digest" in src
+
+
+def test_production_check_ops_token_warn():
+    from scripts.production_check import _check_auth_config
+    with patch("app.config.settings") as mock_settings, \
+         patch("scripts.production_check.settings", mock_settings), \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.AUTH_ENABLED = True
+        mock_settings.ALLOW_DEV_USER_HEADER = False
+        mock_settings.SESSION_COOKIE_SECURE = True
+        mock_settings.SESSION_TTL_SECONDS = 604800
+        mock_settings.OPS_TOKEN = ""
+        result = _check_auth_config()
+        assert result.status == "WARN"
+        assert "ops" in result.message.lower()
+
+
+def test_production_check_ops_token_dev_mode_pass():
+    from scripts.production_check import _check_auth_config
+    with patch("app.config.settings") as mock_settings, \
+         patch("scripts.production_check.settings", mock_settings), \
+         patch("scripts.production_check.is_production", return_value=False):
+        mock_settings.AUTH_ENABLED = True
+        mock_settings.ALLOW_DEV_USER_HEADER = False
+        mock_settings.SESSION_COOKIE_SECURE = True
+        mock_settings.SESSION_TTL_SECONDS = 604800
+        mock_settings.OPS_TOKEN = ""
+        result = _check_auth_config()
+        assert result.status == "PASS"
+
+
+def test_production_check_ops_token_pass():
+    from scripts.production_check import _check_auth_config
+    with patch("app.config.settings") as mock_settings, \
+         patch("scripts.production_check.settings", mock_settings), \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.AUTH_ENABLED = True
+        mock_settings.ALLOW_DEV_USER_HEADER = False
+        mock_settings.SESSION_COOKIE_SECURE = True
+        mock_settings.SESSION_TTL_SECONDS = 604800
+        mock_settings.OPS_TOKEN = "configured"
+        result = _check_auth_config()
+        assert result.status == "PASS"
+        assert "ops token configured" in result.message.lower()
+
+
+def test_production_check_ops_token_not_leaked():
+    from scripts.production_check import _check_auth_config
+    with patch("app.config.settings") as mock_settings, \
+         patch("scripts.production_check.settings", mock_settings), \
+         patch("scripts.production_check.is_production", return_value=True):
+        mock_settings.AUTH_ENABLED = True
+        mock_settings.ALLOW_DEV_USER_HEADER = False
+        mock_settings.SESSION_COOKIE_SECURE = True
+        mock_settings.SESSION_TTL_SECONDS = 604800
+        mock_settings.OPS_TOKEN = "super-secret-ops-token-value"
+        result = _check_auth_config()
+        assert "super-secret-ops-token-value" not in result.message
+
+
+def test_ops_check_ps1_no_register_login_post():
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "ops_check.ps1"
+    if not script_path.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = script_path.read_text(encoding="utf-8")
+    assert "/auth/register" not in content
+    assert "/auth/login" not in content
+    assert "-Method POST" not in content
+
+
+def test_ops_check_ps1_no_token_output():
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "ops_check.ps1"
+    if not script_path.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = script_path.read_text(encoding="utf-8")
+    assert "Write-Host" not in content or "$opsToken" not in content or all(
+        line.strip().startswith("#") or "$opsToken" not in line or "Write-Host" not in line
+        for line in content.splitlines()
+    )
+
+
+def test_ops_check_ps1_reads_ops_token_env():
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "ops_check.ps1"
+    if not script_path.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = script_path.read_text(encoding="utf-8")
+    assert "OPS_TOKEN" in content
+    assert "X-Ops-Token" in content
+
+
+@pytest.mark.asyncio
 async def test_cancel_other_user_job_returns_404():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -772,23 +1076,27 @@ async def test_upload_sync_mode_no_job_id():
 
 @pytest.mark.asyncio
 async def test_worker_health_returns_user_stats():
+    from app.dependencies import get_worker_health_user_id
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        with patch("app.routers.jobs.JobService") as MockService:
-            mock_instance = AsyncMock()
-            mock_instance.get_worker_health = AsyncMock(return_value={
-                "worker_enabled": True,
-                "poll_interval_seconds": 1.0,
-                "max_attempts_default": 1,
-                "stale_running_seconds": 900,
-                "running_count": 2,
-                "pending_count": 3,
-                "failed_count": 1,
-                "stale_running_count": 0,
-            })
-            MockService.return_value = mock_instance
-            with patch("app.routers.jobs.get_user_id", return_value="user1"):
+        app.dependency_overrides[get_worker_health_user_id] = lambda: "user1"
+        try:
+            with patch("app.routers.jobs.JobService") as MockService:
+                mock_instance = AsyncMock()
+                mock_instance.get_worker_health = AsyncMock(return_value={
+                    "worker_enabled": True,
+                    "poll_interval_seconds": 1.0,
+                    "max_attempts_default": 1,
+                    "stale_running_seconds": 900,
+                    "running_count": 2,
+                    "pending_count": 3,
+                    "failed_count": 1,
+                    "stale_running_count": 0,
+                })
+                MockService.return_value = mock_instance
                 response = await client.get("/jobs/worker/health")
+        finally:
+            app.dependency_overrides.pop(get_worker_health_user_id, None)
 
     assert response.status_code == 200
     data = response.json()

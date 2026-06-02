@@ -33,13 +33,28 @@ function Write-Ok {
     Write-Host "  $Msg" -ForegroundColor Green
 }
 
+function Test-PythonCandidate {
+    param([string]$Exe, [string[]]$Args)
+    $cmd = Get-Command $Exe -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $null = & $Exe @($Args + @("--version")) 2>&1
+        if ($LASTEXITCODE -eq 0) { return $true }
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+    return $false
+}
+
 function Resolve-PythonCommand {
-    $py = Get-Command python -ErrorAction SilentlyContinue
-    if ($py) {
+    if (Test-PythonCandidate -Exe "python" -Args @()) {
         return [PSCustomObject]@{ Exe = "python"; Args = @() }
     }
-    $py3 = Get-Command py -ErrorAction SilentlyContinue
-    if ($py3) {
+    if (Test-PythonCandidate -Exe "py" -Args @("-3")) {
         return [PSCustomObject]@{ Exe = "py"; Args = @("-3") }
     }
     Write-Host "ERROR: Python was not found. Install Python or add it to PATH." -ForegroundColor Red

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 
 from fastapi import Header, HTTPException, Request
@@ -44,3 +45,15 @@ async def get_user_id(
                 detail="Invalid X-User-Id: must be 1-64 chars, only letters, digits, underscore, hyphen, dot",
             )
         return x_user_id
+
+
+async def get_worker_health_user_id(
+    request: Request,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_ops_token: str | None = Header(default=None, alias="X-Ops-Token"),
+) -> str | None:
+    if x_ops_token is not None:
+        if settings.OPS_TOKEN and hmac.compare_digest(x_ops_token, settings.OPS_TOKEN):
+            return None
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return await get_user_id(request, x_user_id)

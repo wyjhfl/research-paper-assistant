@@ -5,6 +5,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run Playwright E2E tests"
+        type: boolean
+        default: false
+      run_backend_integration:
+        description: "Run backend integration tests (Docker Compose)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   docs-and-security:
@@ -64,3 +78,81 @@ jobs:
       - name: Build frontend
         working-directory: apps/web
         run: npm run build
+
+  frontend-e2e:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: apps/web
+        run: npm run test:e2e
+
+  backend-integration:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_backend_integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres backend
+
+      - name: Wait for backend healthy
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" 2>/dev/null; then
+              echo "Backend is healthy"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 5
+          done
+          echo "Backend did not become healthy"
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs backend
+          exit 1
+
+      - name: Run smoke check
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T backend python scripts/smoke_check.py
+
+      - name: Run backend integration tests
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T backend python -m pytest \
+            tests/test_papers.py \
+            tests/test_ideas.py \
+            tests/test_multi_paper.py \
+            tests/test_user_isolation.py \
+            tests/test_jobs.py \
+            tests/test_model_call_audit.py \
+            tests/test_eval_report.py \
+            tests/test_openapi_contract.py \
+            tests/test_auth.py \
+            tests/test_mcp.py \
+            tests/test_agent.py \
+            tests/test_langgraph.py \
+            tests/test_provider.py \
+            tests/test_storage_lifecycle.py \
+            -q
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
