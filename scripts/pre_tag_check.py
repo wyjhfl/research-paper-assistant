@@ -106,13 +106,17 @@ def _make_path_relative(text: str, project_root: Path) -> str:
 
 
 def _check_release_notes(project_root: Path):
-    rn = project_root / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
-    if not rn.exists():
+    rn_rc = project_root / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
+    rn_final = project_root / "docs" / "RELEASE_NOTES_v1.0.1.md"
+    if not rn_rc.exists():
         return {"name": "release_notes_exist", "ok": False, "detail": "RELEASE_NOTES_v1.0.1-rc.1.md not found"}
-    content = rn.read_text(encoding="utf-8")
-    if "ALL CHECKS PASSED" in content:
-        return {"name": "release_notes_no_false_claims", "ok": False, "detail": "Release notes contains ALL CHECKS PASSED without full gate execution"}
-    return {"name": "release_notes_valid", "ok": True, "detail": "Release notes exists and no false claims"}
+    if not rn_final.exists():
+        return {"name": "release_notes_exist", "ok": False, "detail": "RELEASE_NOTES_v1.0.1.md not found"}
+    for rn in [rn_rc, rn_final]:
+        content = rn.read_text(encoding="utf-8")
+        if "ALL CHECKS PASSED" in content:
+            return {"name": "release_notes_no_false_claims", "ok": False, "detail": f"{rn.name} contains ALL CHECKS PASSED without full gate execution"}
+    return {"name": "release_notes_valid", "ok": True, "detail": "Release notes exist and no false claims"}
 
 
 def _check_collect_evidence(project_root: Path):
@@ -231,7 +235,7 @@ def _check_version_consistency(project_root: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pre-tag check for v1.0.1-rc.1")
+    parser = argparse.ArgumentParser(description="Pre-tag check for v1.0.1")
     parser.add_argument("--output-dir", type=str, default=None, help="Optional output directory for JSON result")
     args = parser.parse_args()
 

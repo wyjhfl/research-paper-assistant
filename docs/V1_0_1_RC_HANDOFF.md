@@ -141,3 +141,8 @@
 - No absolute host paths in any committed file
 - No ALL CHECKS PASSED claims without full gate execution
 - No mojibake in any file
+
+## Final Release Note
+
+- v1.0.1 final tag created 2026-06-04, based on this RC (v1.0.1-rc.1 / d1d3715).
+- v1.0.1-rc.1 tag preserved; final tag is separate, not a tag move.

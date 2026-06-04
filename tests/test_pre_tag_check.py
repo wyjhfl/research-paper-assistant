@@ -183,24 +183,30 @@ class TestPreTagCheckSmoke:
 
 
 class TestReleaseNotes:
-    def test_release_notes_exist(self):
+    def test_release_notes_rc_exist(self):
         rn = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
         assert rn.exists(), "RELEASE_NOTES_v1.0.1-rc.1.md must exist"
 
+    def test_release_notes_final_exist(self):
+        rn = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1.md"
+        assert rn.exists(), "RELEASE_NOTES_v1.0.1.md must exist"
+
     def test_no_secrets_in_release_notes(self):
-        rn = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
-        if not rn.exists():
-            return
-        content = rn.read_text(encoding="utf-8")
-        for pattern in ["API_KEY=", "SECRET=", "PASSWORD=", "DATABASE_URL="]:
-            assert pattern not in content, f"release notes must not contain {pattern}"
+        for rn_name in ["RELEASE_NOTES_v1.0.1-rc.1.md", "RELEASE_NOTES_v1.0.1.md"]:
+            rn = PROJECT_ROOT / "docs" / rn_name
+            if not rn.exists():
+                continue
+            content = rn.read_text(encoding="utf-8")
+            for pattern in ["API_KEY=", "SECRET=", "PASSWORD=", "DATABASE_URL="]:
+                assert pattern not in content, f"{rn_name} must not contain {pattern}"
 
     def test_no_all_checks_passed(self):
-        rn = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
-        if not rn.exists():
-            return
-        content = rn.read_text(encoding="utf-8")
-        assert "ALL CHECKS PASSED" not in content, "must not claim ALL CHECKS PASSED without full gate"
+        for rn_name in ["RELEASE_NOTES_v1.0.1-rc.1.md", "RELEASE_NOTES_v1.0.1.md"]:
+            rn = PROJECT_ROOT / "docs" / rn_name
+            if not rn.exists():
+                continue
+            content = rn.read_text(encoding="utf-8")
+            assert "ALL CHECKS PASSED" not in content, f"{rn_name} must not claim ALL CHECKS PASSED without full gate"
 
     def test_contains_phase_summaries(self):
         rn = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
@@ -223,17 +229,17 @@ class TestVersionConsistency:
     def test_config_py_version(self):
         config_py = PROJECT_ROOT / "apps" / "api" / "app" / "config.py"
         content = config_py.read_text(encoding="utf-8")
-        assert "1.0.1-rc.1" in content, "config.py must have version 1.0.1-rc.1"
+        assert "1.0.1" in content, "config.py must have version 1.0.1"
 
     def test_env_example_version(self):
         env_example = PROJECT_ROOT / ".env.example"
         content = env_example.read_text(encoding="utf-8")
-        assert "APP_VERSION=1.0.1-rc.1" in content, ".env.example must have APP_VERSION=1.0.1-rc.1"
+        assert "APP_VERSION=1.0.1" in content, ".env.example must have APP_VERSION=1.0.1"
 
     def test_api_contract_version(self):
         api_contract = PROJECT_ROOT / "docs" / "API_CONTRACT.md"
         content = api_contract.read_text(encoding="utf-8")
-        assert "1.0.1-rc.1" in content, "API_CONTRACT.md must have version 1.0.1-rc.1"
+        assert "1.0.1" in content, "API_CONTRACT.md must have version 1.0.1"
 
 
 class TestPreTagCheckCrossCwd:

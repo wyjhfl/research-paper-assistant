@@ -315,7 +315,7 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 ```json
 {
   "status": "ok",
-  "version": "1.0.1-rc.1",
+  "version": "1.0.1",
   "database": "connected"
 }
 ```

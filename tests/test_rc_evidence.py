@@ -147,7 +147,7 @@ class TestRCEvidenceVersionRead:
                 data = json.loads(json_files[0].read_text(encoding="utf-8"))
                 version = data.get("version", {}).get("app_version", "unknown")
                 assert version != "unknown", "app_version should not be unknown when config.py exists"
-                assert version == "1.0.1-rc.1", f"app_version should be 1.0.1-rc.1, got {version}"
+                assert version.startswith("1.0.1"), f"app_version should start with 1.0.1, got {version}"
 
 
 class TestRCEvidenceCwdConsistency:

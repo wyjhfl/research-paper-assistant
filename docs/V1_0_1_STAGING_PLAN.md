@@ -261,3 +261,9 @@ Before executing any staging command:
 - [ ] All pytest suites passed
 - [ ] Review RELEASE_NOTES for accuracy
 - [ ] Confirm .env not staged (`git diff --cached .env` empty)
+
+## Final Release Note
+
+- v1.0.1 final released 2026-06-04.
+- Staging was executed as single commit (d1d3715): `chore: prepare v1.0.1-rc.1 production hardening`.
+- Final commit: `release: finalize v1.0.1` (version bump from rc.1 to final).

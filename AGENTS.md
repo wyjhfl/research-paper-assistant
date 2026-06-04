@@ -5,7 +5,7 @@
 ## 一、Project Overview
 
 - **项目名称**：多 Agent 科研论文助手
-- **版本**：1.0.0
+- **版本**：1.0.1
 - **当前能力**：
   - PDF 上传解析（pypdf 按页提取 + 固定字符切分 + 重叠）
   - chunk 入库（pgvector embedding）

@@ -172,7 +172,7 @@ class TestCollectEvidenceFinal:
         result = subprocess.run([GIT_EXE, "ls-files", "artifacts/rc"], capture_output=True, text=True, timeout=10, cwd=str(PROJECT_ROOT))
         assert result.stdout.strip() == "", "artifacts/rc output must not be tracked"
 
-    def test_evidence_version_is_rc1(self):
+    def test_evidence_version_starts_with_1_0_1(self):
         if not RC_SCRIPT.exists():
             return
         import tempfile
@@ -181,18 +181,19 @@ class TestCollectEvidenceFinal:
             json_files = list(Path(tmpdir).glob("rc_evidence_*.json"))
             if json_files:
                 data = json.loads(json_files[0].read_text(encoding="utf-8"))
-                assert data.get("version", {}).get("app_version") == "1.0.1-rc.1"
+                version = data.get("version", {}).get("app_version", "")
+                assert version.startswith("1.0.1"), f"evidence version should start with 1.0.1, got {version}"
 
 
 class TestVersionConsistencyFinal:
     def test_config_py(self):
-        assert "1.0.1-rc.1" in _read(CONFIG_PY)
+        assert "1.0.1" in _read(CONFIG_PY)
 
     def test_env_example(self):
-        assert "APP_VERSION=1.0.1-rc.1" in _read(ENV_EXAMPLE)
+        assert "APP_VERSION=1.0.1" in _read(ENV_EXAMPLE)
 
     def test_api_contract(self):
-        assert "1.0.1-rc.1" in _read(API_CONTRACT)
+        assert "1.0.1" in _read(API_CONTRACT)
 
 
 class TestWorkflowSafetyFinal:
@@ -255,3 +256,37 @@ class TestHandoffDocConsistency:
                     if token.startswith("apps/"):
                         continue
                     assert token.startswith("tests/"), f"pytest test path must start with tests/, got: {token} in line: {line}"
+
+
+class TestFinalReleaseNotes:
+    FINAL_RELEASE_NOTES = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1.md"
+
+    def test_final_release_notes_exists(self):
+        assert self.FINAL_RELEASE_NOTES.exists(), "docs/RELEASE_NOTES_v1.0.1.md must exist"
+
+    def test_no_all_checks_passed(self):
+        if not self.FINAL_RELEASE_NOTES.exists():
+            return
+        content = _read(self.FINAL_RELEASE_NOTES)
+        assert "ALL CHECKS PASSED" not in content, "must not claim ALL CHECKS PASSED"
+
+    def test_no_false_ci_claims(self):
+        if not self.FINAL_RELEASE_NOTES.exists():
+            return
+        content = _read(self.FINAL_RELEASE_NOTES)
+        for claim in ["Docker 已通过", "Playwright 已通过", "verify_all 已通过", "rc_gate 已通过", "真实模型 eval 已通过"]:
+            assert claim not in content, f"must not claim {claim}"
+
+    def test_no_secrets(self):
+        if not self.FINAL_RELEASE_NOTES.exists():
+            return
+        content = _read(self.FINAL_RELEASE_NOTES)
+        for p in ["API_KEY=", "SECRET=", "PASSWORD=", "DATABASE_URL="]:
+            assert p not in content
+
+    def test_references_rc_source(self):
+        if not self.FINAL_RELEASE_NOTES.exists():
+            return
+        content = _read(self.FINAL_RELEASE_NOTES)
+        assert "v1.0.1-rc.1" in content, "must reference v1.0.1-rc.1"
+        assert "d1d3715" in content, "must reference commit d1d3715"

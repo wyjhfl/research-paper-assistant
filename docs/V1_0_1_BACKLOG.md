@@ -214,3 +214,8 @@ v1.0.0 发布后已知限制、运维观察项和修复计划。按优先级分�
 - Phase 4：P2 #6 backup freshness 定时化生产化已完成
 - Phase 5：P2 #6a RC Evidence Pack 已完成
 - Phase 6：P2 #6b v1.0.1 RC Release Package 生产化已完成
+
+## Final Release
+
+- **v1.0.1** released 2026-06-04, based on v1.0.1-rc.1 (d1d3715).
+- v1.0.1-rc.1 tag preserved; v1.0.1 is a separate tag, not a tag move.

@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/research_assistant"
     APP_NAME: str = "Research Paper Assistant API"
-    APP_VERSION: str = "1.0.1-rc.1"
+    APP_VERSION: str = "1.0.1"
     STORAGE_PATH: str = "./storage"
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200

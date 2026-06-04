@@ -6,6 +6,22 @@ RC 门禁命令，按顺序执行，不要并行。
 
 ---
 
+## v1.0.1 正式发布流程
+
+v1.0.1 正式发布基于 v1.0.1-rc.1（commit d1d3715）+ 用户人工确认 GitHub Actions 成功。流程如下：
+
+1. 版本从 1.0.1-rc.1 提升为 1.0.1（config.py / .env.example / API_CONTRACT.md）
+2. 新增 `docs/RELEASE_NOTES_v1.0.1.md`（正式发布说明）
+3. 更新测试覆盖 final 版本一致性
+4. 运行本地 pytest + pre_tag_check + secret scan + mojibake scan
+5. 提交 `release: finalize v1.0.1` commit
+6. 创建 `v1.0.1` tag + push commit + push tag
+7. 人工检查 GitHub Actions
+
+> v1.0.1-rc.1 文档和 tag 保留为历史记录，不修改已推送的 rc.1 tag。
+
+---
+
 ## v1.0.0 正式发布流程
 
 v1.0.0 正式发布基于 v1.0.0-rc.1 + Phase 44 E2E 证据更新。流程如下：

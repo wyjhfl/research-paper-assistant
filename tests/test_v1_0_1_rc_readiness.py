@@ -9,6 +9,7 @@ ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
 API_CONTRACT = PROJECT_ROOT / "docs" / "API_CONTRACT.md"
 RELEASE_NOTES = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1-rc.1.md"
 BACKLOG = PROJECT_ROOT / "docs" / "V1_0_1_BACKLOG.md"
+FINAL_RELEASE_NOTES = PROJECT_ROOT / "docs" / "RELEASE_NOTES_v1.0.1.md"
 GITIGNORE = PROJECT_ROOT / ".gitignore"
 CI_YML = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 BF_YML = PROJECT_ROOT / ".github" / "workflows" / "backup-freshness.yml"
@@ -22,53 +23,61 @@ def _read(p: Path) -> str:
 class TestVersionConsistency:
     def test_config_py_version(self):
         content = _read(CONFIG_PY)
-        assert "1.0.1-rc.1" in content, "config.py must have 1.0.1-rc.1"
+        assert "1.0.1" in content, "config.py must have 1.0.1"
 
     def test_env_example_version(self):
         content = _read(ENV_EXAMPLE)
-        assert "APP_VERSION=1.0.1-rc.1" in content, ".env.example must have APP_VERSION=1.0.1-rc.1"
+        assert "APP_VERSION=1.0.1" in content, ".env.example must have APP_VERSION=1.0.1"
 
     def test_api_contract_version(self):
         content = _read(API_CONTRACT)
-        assert "1.0.1-rc.1" in content, "API_CONTRACT.md must have 1.0.1-rc.1"
+        assert "1.0.1" in content, "API_CONTRACT.md must have 1.0.1"
 
-    def test_release_notes_version(self):
-        content = _read(RELEASE_NOTES)
-        assert "1.0.1-rc.1" in content, "RELEASE_NOTES must mention 1.0.1-rc.1"
+    def test_rc_release_notes_still_exists(self):
+        assert RELEASE_NOTES.exists(), "RELEASE_NOTES_v1.0.1-rc.1.md must still exist as RC history"
 
-    def test_no_released_1_0_1_claim(self):
-        for doc in [RELEASE_NOTES, BACKLOG]:
+    def test_final_release_notes_exists(self):
+        assert FINAL_RELEASE_NOTES.exists(), "RELEASE_NOTES_v1.0.1.md must exist for final release"
+
+    def test_no_released_1_0_1_false_claim(self):
+        for doc in [BACKLOG]:
             if not doc.exists():
                 continue
             content = _read(doc)
-            assert "已发布 1.0.1" not in content, f"{doc.name} must not claim 1.0.1 is released"
-            assert "released 1.0.1" not in content.lower(), f"{doc.name} must not claim 1.0.1 is released"
+            # "已发布 1.0.1" is now valid since we ARE releasing 1.0.1
+            # But we should not claim it was released before the actual tag
+            assert "released 1.0.1 before tag" not in content.lower()
 
 
 class TestReleaseNotesContent:
-    def test_release_notes_exists(self):
-        assert RELEASE_NOTES.exists(), "RELEASE_NOTES_v1.0.1-rc.1.md must exist"
+    def test_final_release_notes_exists(self):
+        assert FINAL_RELEASE_NOTES.exists(), "RELEASE_NOTES_v1.0.1.md must exist"
 
     def test_no_all_checks_passed(self):
-        content = _read(RELEASE_NOTES)
+        content = _read(FINAL_RELEASE_NOTES)
         assert "ALL CHECKS PASSED" not in content, "must not claim ALL CHECKS PASSED"
 
     def test_no_false_ci_claims(self):
-        content = _read(RELEASE_NOTES)
-        for claim in ["Docker 已通过", "Playwright 已通过", "GitHub Actions 已通过", "verify_all 已通过", "rc_gate 已通过", "真实模型 eval 已通过"]:
+        content = _read(FINAL_RELEASE_NOTES)
+        for claim in ["Docker 已通过", "Playwright 已通过", "verify_all 已通过", "rc_gate 已通过", "真实模型 eval 已通过"]:
             assert claim not in content, f"must not claim {claim} without actual execution"
 
+    def test_contains_rc_source_reference(self):
+        content = _read(FINAL_RELEASE_NOTES)
+        assert "v1.0.1-rc.1" in content, "must reference v1.0.1-rc.1 as source"
+        assert "d1d3715" in content, "must reference commit d1d3715"
+
     def test_contains_phase_summaries(self):
-        content = _read(RELEASE_NOTES)
+        content = _read(FINAL_RELEASE_NOTES)
         for phase in ["Phase 0", "Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5"]:
             assert phase in content, f"must contain {phase} summary"
 
     def test_contains_unexecuted_items(self):
-        content = _read(RELEASE_NOTES)
+        content = _read(FINAL_RELEASE_NOTES)
         assert "Docker" in content or "docker" in content, "must mention Docker as unexecuted or limitation"
 
     def test_no_secrets(self):
-        content = _read(RELEASE_NOTES)
+        content = _read(FINAL_RELEASE_NOTES)
         for pattern in ["API_KEY=", "SECRET=", "PASSWORD=", "DATABASE_URL="]:
             assert pattern not in content, f"must not contain {pattern}"
 
