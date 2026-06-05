@@ -516,7 +516,10 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "page_start": 3,
       "page_end": 4,
       "text_excerpt": "...",
-      "score": 0.82
+      "score": 0.82,
+      "vector_score": 0.75,
+      "lexical_score": 0.45,
+      "retrieval_mode": "hybrid"
     }
   ],
   "evidence_gate_reason": "",
@@ -535,6 +538,26 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 | retrieved_source_count | int | 检索到的来源数量 |
 | top_source_score | float | 最高来源相关度分数 |
 
+**source item 字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| paper_id | int | 论文 ID |
+| chunk_id | int | Chunk ID |
+| chunk_index | int | Chunk 序号 |
+| page_start | int | 起始页 |
+| page_end | int | 结束页 |
+| text_excerpt | string | 文本摘录 |
+| score | float | 最终排序分数（hybrid/lexical/vector） |
+| vector_score | float | 向量检索分数 |
+| lexical_score | float | 关键词匹配分数 |
+| retrieval_mode | string | `"vector"` / `"lexical"` / `"hybrid"` |
+
+**retrieval_mode 取值**：
+- `"vector"` — 纯向量检索（真实 embedding 且无关键词匹配）
+- `"lexical"` — 纯关键词检索（local embedding 下主要模式）
+- `"hybrid"` — 混合检索（真实 embedding + 关键词匹配）
+
 **evidence_gate_reason 取值**：
 - `""` — 正常回答，通过门控
 - `"no_chunks"` — 论文无文本片段
@@ -543,6 +566,7 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 - `"score_below_threshold"` — 检索得分低于阈值
 - `"evidence_below_threshold"` — 词汇证据不足
 - `"no_query_tokens"` — 问题关键词不足
+- `"no_lexical_match"` — 关键词无匹配（local embedding 下）
 - `"llm_failed"` — AI 服务暂时不可用
 
 **RAG 响应契约**：
@@ -599,7 +623,10 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "page_start": 5,
       "page_end": 6,
       "text_excerpt": "...",
-      "score": 0.79
+      "score": 0.79,
+      "vector_score": 0.65,
+      "lexical_score": 0.52,
+      "retrieval_mode": "hybrid"
     }
   ],
   "evidence_gate_reason": "",
@@ -657,7 +684,10 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "page_start": 3,
       "page_end": 4,
       "text_excerpt": "...",
-      "score": 0.85
+      "score": 0.85,
+      "vector_score": 0.72,
+      "lexical_score": 0.48,
+      "retrieval_mode": "hybrid"
     }
   ]
 }
@@ -1279,3 +1309,25 @@ ModelCallEventItem 字段：
 - 只读取固定路径 `artifacts/evals/real_model_eval_latest.json`，不允许路径穿越
 
 **是否依赖真实模型**：否（只读文件）
+
+---
+
+## Hybrid Retrieval 配置
+
+Phase 34 起，RAG 检索支持 hybrid 模式，在 local embedding 场景下通过关键词匹配提供可用的 strict RAG。
+
+### 环境变量
+
+| 变量 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| LEXICAL_RETRIEVAL_ENABLED | bool | true | 启用关键词检索 |
+| LEXICAL_SCORE_THRESHOLD | float | 0.15 | 关键词匹配分数阈值（local embedding 下替代 RAG_SCORE_THRESHOLD） |
+| HYBRID_VECTOR_WEIGHT | float | 0.7 | 真实 embedding 下向量分数权重 |
+| HYBRID_LEXICAL_WEIGHT | float | 0.3 | 真实 embedding 下关键词分数权重 |
+
+### 检索策略
+
+- **local embedding**（`EMBEDDING_PROVIDER=local`）：关键词分数作为主排序信号（0.9 * lexical + 0.1 * vector），evidence gate 使用 `LEXICAL_SCORE_THRESHOLD`
+- **真实 embedding**：混合排序（`HYBRID_VECTOR_WEIGHT * vector + HYBRID_LEXICAL_WEIGHT * lexical`），evidence gate 使用 `RAG_SCORE_THRESHOLD` + `RAG_EVIDENCE_THRESHOLD`
+- 关键词匹配不依赖外部 API，基于 token overlap + query recall + phrase bonus + title bonus
+- 不破坏已有真实 embedding 路径

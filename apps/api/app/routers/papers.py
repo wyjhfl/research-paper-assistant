@@ -167,6 +167,9 @@ async def ask_paper(
                 "page_end": s.page_end,
                 "text_excerpt": s.text_excerpt,
                 "score": s.score,
+                "vector_score": s.vector_score,
+                "lexical_score": s.lexical_score,
+                "retrieval_mode": s.retrieval_mode,
             }
             for s in result.sources
         ],
@@ -284,6 +287,9 @@ async def multi_paper_ask(
                 "page_end": s.page_end,
                 "text_excerpt": s.text_excerpt,
                 "score": s.score,
+                "vector_score": s.vector_score,
+                "lexical_score": s.lexical_score,
+                "retrieval_mode": s.retrieval_mode,
             }
             for s in result.sources
         ],
@@ -326,6 +332,9 @@ async def search_papers(
                 "page_end": r.page_end,
                 "text_excerpt": r.text_excerpt,
                 "score": r.score,
+                "vector_score": r.vector_score,
+                "lexical_score": r.lexical_score,
+                "retrieval_mode": r.retrieval_mode,
             }
             for r in results
         ],

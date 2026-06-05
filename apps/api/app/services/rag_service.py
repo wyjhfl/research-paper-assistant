@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from dataclasses import dataclass
 
@@ -13,28 +12,15 @@ from ..repositories.paper_repo import PaperRepository
 from ..models import Paper
 from .ai_provider import get_llm_provider, _tokenize, ProviderConfigurationError, ProviderRequestError, ProviderResponseError, EmbeddingDimensionError
 from .embedding_service import EmbeddingService
+from .lexical_retrieval import (
+    compute_lexical_score,
+    compute_hybrid_score,
+    determine_retrieval_mode,
+    is_local_embedding_provider,
+)
 from .model_call_audit_service import record_model_call
 
 logger = logging.getLogger(__name__)
-
-_STOP_WORDS: set[str] = {
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
-    "should", "may", "might", "must", "can", "could", "of", "in", "to",
-    "for", "on", "with", "at", "by", "from", "as", "into", "through",
-    "during", "before", "after", "above", "below", "between", "out", "off",
-    "over", "under", "again", "further", "then", "once", "and", "but", "or",
-    "nor", "not", "so", "yet", "both", "either", "neither", "each", "every",
-    "all", "any", "few", "more", "most", "other", "some", "such", "no",
-    "only", "own", "same", "than", "too", "very", "just", "because",
-    "if", "when", "where", "how", "what", "which", "who", "whom", "this",
-    "that", "these", "those", "it", "its", "he", "she", "they", "them",
-    "we", "you", "i", "me", "my", "your", "his", "her", "our", "their",
-}
-
-
-def _remove_stop_words(tokens: set[str]) -> set[str]:
-    return tokens - _STOP_WORDS
 
 
 @dataclass
@@ -45,6 +31,9 @@ class RetrievedChunk:
     page_end: int
     text_excerpt: str
     score: float
+    vector_score: float = 0.0
+    lexical_score: float = 0.0
+    retrieval_mode: str = "vector"
 
 
 @dataclass
@@ -56,13 +45,6 @@ class AnswerResult:
     evidence_gate_reason: str = ""
     retrieved_source_count: int = 0
     top_source_score: float = 0.0
-
-
-def _lexical_overlap(query_tokens: set[str], source_tokens: set[str]) -> float:
-    if not query_tokens or not source_tokens:
-        return 0.0
-    overlap = query_tokens & source_tokens
-    return len(overlap) / len(query_tokens)
 
 
 class RAGService:
@@ -109,7 +91,7 @@ class RAGService:
             question, metadata={"paper_id": paper_id},
         )
 
-        retrieved = await self._retrieve(paper_id, query_embedding)
+        retrieved = await self._retrieve(paper_id, query_embedding, question, paper.title)
 
         if not retrieved:
             return AnswerResult(
@@ -126,7 +108,12 @@ class RAGService:
         confidence = min(top_score, 1.0)
         source_count = len(retrieved)
 
-        if confidence < settings.RAG_SCORE_THRESHOLD:
+        # Use appropriate score threshold based on retrieval mode
+        score_threshold = settings.RAG_SCORE_THRESHOLD
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            score_threshold = settings.LEXICAL_SCORE_THRESHOLD
+
+        if confidence < score_threshold:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, paper_id, "score_below_threshold",
@@ -141,7 +128,9 @@ class RAGService:
                 top_source_score=top_score,
             )
 
-        query_tokens = _remove_stop_words(set(_tokenize(question)))
+        # Check query tokens for evidence gate
+        from .lexical_retrieval import tokenize as lex_tokenize
+        query_tokens = set(lex_tokenize(question))
         if not query_tokens:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
@@ -156,14 +145,21 @@ class RAGService:
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
             )
-        best_overlap = 0.0
-        for r in retrieved:
-            source_tokens = _remove_stop_words(set(_tokenize(r.text_excerpt)))
-            overlap = _lexical_overlap(query_tokens, source_tokens)
-            if overlap > best_overlap:
-                best_overlap = overlap
 
-        if best_overlap < settings.RAG_EVIDENCE_THRESHOLD:
+        # Check lexical evidence overlap
+        best_lexical = 0.0
+        for r in retrieved:
+            if r.lexical_score > best_lexical:
+                best_lexical = r.lexical_score
+
+        # Evidence gate: if best lexical overlap is very low even with good hybrid score
+        evidence_threshold = settings.RAG_EVIDENCE_THRESHOLD
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            evidence_threshold = settings.LEXICAL_SCORE_THRESHOLD
+
+        if best_lexical < evidence_threshold and not is_local_embedding_provider():
+            # Only apply evidence gate for non-local providers
+            # For local provider, lexical score IS the evidence
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, paper_id, "evidence_below_threshold",
@@ -177,6 +173,23 @@ class RAGService:
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
             )
+
+        # For local provider with lexical retrieval: check if any lexical match exists
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            if best_lexical < evidence_threshold:
+                if allow_low_confidence_answer and source_count > 0:
+                    return await self._generate_low_confidence_answer(
+                        question, retrieved, confidence, paper_id, "no_lexical_match",
+                    )
+                return AnswerResult(
+                    answer="当前论文片段不足以回答，不生成无依据答案。",
+                    status="insufficient_context",
+                    confidence=confidence,
+                    sources=retrieved,
+                    evidence_gate_reason="no_lexical_match",
+                    retrieved_source_count=source_count,
+                    top_source_score=top_score,
+                )
 
         contexts = [r.text_excerpt for r in retrieved]
         llm_start = time.monotonic()
@@ -292,7 +305,7 @@ class RAGService:
             )
 
     async def _retrieve(
-        self, paper_id: int, query_embedding: list[float]
+        self, paper_id: int, query_embedding: list[float], question: str = "", paper_title: str = "",
     ) -> list[RetrievedChunk]:
         emb_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
         sql = text("""
@@ -317,7 +330,22 @@ class RAGService:
         for row in rows:
             text_val = row.text
             excerpt = text_val[:300] + ("..." if len(text_val) > 300 else "")
-            score = max(0.0, min(1.0, row.score))
+            vector_score = max(0.0, min(1.0, row.score))
+
+            # Compute lexical score if enabled
+            lexical = 0.0
+            final_score = vector_score
+            retrieval_mode = "vector"
+
+            if settings.LEXICAL_RETRIEVAL_ENABLED and question:
+                lex_result = compute_lexical_score(question, text_val, paper_title)
+                lexical = lex_result.score
+                final_score = compute_hybrid_score(
+                    vector_score, lexical,
+                    settings.HYBRID_VECTOR_WEIGHT, settings.HYBRID_LEXICAL_WEIGHT,
+                )
+                retrieval_mode = determine_retrieval_mode(vector_score, lexical)
+
             retrieved.append(
                 RetrievedChunk(
                     chunk_id=row.id,
@@ -325,9 +353,15 @@ class RAGService:
                     page_start=row.page_start,
                     page_end=row.page_end,
                     text_excerpt=excerpt,
-                    score=round(score, 4),
+                    score=round(final_score, 4),
+                    vector_score=round(vector_score, 4),
+                    lexical_score=round(lexical, 4),
+                    retrieval_mode=retrieval_mode,
                 )
             )
+
+        # Re-sort by final hybrid score
+        retrieved.sort(key=lambda r: r.score, reverse=True)
         return retrieved
 
 

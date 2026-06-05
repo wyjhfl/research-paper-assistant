@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     RAG_SCORE_THRESHOLD: float = 0.1
     RAG_EVIDENCE_THRESHOLD: float = 0.2
 
+    LEXICAL_RETRIEVAL_ENABLED: bool = True
+    LEXICAL_SCORE_THRESHOLD: float = 0.15
+    HYBRID_VECTOR_WEIGHT: float = 0.7
+    HYBRID_LEXICAL_WEIGHT: float = 0.3
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

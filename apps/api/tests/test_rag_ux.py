@@ -86,6 +86,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="unrelated weather content", score=0.05,
+                vector_score=0.05, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 
@@ -115,6 +116,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="some content about models", score=0.05,
+                vector_score=0.05, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 
@@ -203,6 +205,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="weather patterns and climate data analysis", score=0.5,
+                vector_score=0.5, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 
@@ -214,7 +217,8 @@ class TestRAGServiceEvidenceGate:
 
         result = await service.ask(paper_id=1, question="quantum entanglement experiments")
         assert result.status == "insufficient_context"
-        assert result.evidence_gate_reason == "evidence_below_threshold"
+        # With local provider and no lexical match, reason is no_lexical_match
+        assert result.evidence_gate_reason in ("evidence_below_threshold", "no_lexical_match")
 
     @pytest.mark.asyncio
     async def test_evidence_below_threshold_low_confidence_allows(self):
@@ -229,6 +233,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="weather patterns and climate data analysis", score=0.5,
+                vector_score=0.5, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 
@@ -245,7 +250,7 @@ class TestRAGServiceEvidenceGate:
             allow_low_confidence_answer=True,
         )
         assert result.status == "low_confidence_answer"
-        assert result.evidence_gate_reason == "evidence_below_threshold"
+        assert result.evidence_gate_reason in ("evidence_below_threshold", "no_lexical_match")
         assert "低置信度" in result.answer
 
     @pytest.mark.asyncio
@@ -261,7 +266,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="Deep learning models achieve state of the art results in computer vision.",
-                score=0.9,
+                score=0.9, vector_score=0.0, lexical_score=0.5, retrieval_mode="lexical",
             ),
         ]
 
@@ -292,7 +297,7 @@ class TestRAGServiceEvidenceGate:
             RetrievedChunk(
                 chunk_id=1, chunk_index=0, page_start=1, page_end=1,
                 text_excerpt="Deep learning models achieve state of the art results.",
-                score=0.9,
+                score=0.9, vector_score=0.0, lexical_score=0.5, retrieval_mode="lexical",
             ),
         ]
 
@@ -331,6 +336,7 @@ class TestMultiPaperRAGServiceEvidenceGate:
                 paper_id=1, paper_title="Test", chunk_id=1, chunk_index=0,
                 page_start=1, page_end=1,
                 text_excerpt="unrelated content", score=0.05,
+                vector_score=0.05, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 
@@ -357,6 +363,7 @@ class TestMultiPaperRAGServiceEvidenceGate:
                 paper_id=1, paper_title="Test", chunk_id=1, chunk_index=0,
                 page_start=1, page_end=1,
                 text_excerpt="some model content", score=0.05,
+                vector_score=0.05, lexical_score=0.0, retrieval_mode="vector",
             ),
         ]
 

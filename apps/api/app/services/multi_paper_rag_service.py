@@ -12,35 +12,15 @@ from ..models import Paper, PaperChunk
 from ..repositories.paper_repo import PaperRepository
 from .ai_provider import get_llm_provider, _tokenize, ProviderConfigurationError, ProviderRequestError, ProviderResponseError
 from .embedding_service import EmbeddingService
+from .lexical_retrieval import (
+    compute_lexical_score,
+    compute_hybrid_score,
+    determine_retrieval_mode,
+    is_local_embedding_provider,
+)
 from .model_call_audit_service import record_model_call
 
 logger = logging.getLogger(__name__)
-
-_STOP_WORDS: set[str] = {
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
-    "should", "may", "might", "must", "can", "could", "of", "in", "to",
-    "for", "on", "with", "at", "by", "from", "as", "into", "through",
-    "during", "before", "after", "above", "below", "between", "out", "off",
-    "over", "under", "again", "further", "then", "once", "and", "but", "or",
-    "nor", "not", "so", "yet", "both", "either", "neither", "each", "every",
-    "all", "any", "few", "more", "most", "other", "some", "such", "no",
-    "only", "own", "same", "than", "too", "very", "just", "because",
-    "if", "when", "where", "how", "what", "which", "who", "whom", "this",
-    "that", "these", "those", "it", "its", "he", "she", "they", "them",
-    "we", "you", "i", "me", "my", "your", "his", "her", "our", "their",
-}
-
-
-def _remove_stop_words(tokens: set[str]) -> set[str]:
-    return tokens - _STOP_WORDS
-
-
-def _lexical_overlap(query_tokens: set[str], source_tokens: set[str]) -> float:
-    if not query_tokens or not source_tokens:
-        return 0.0
-    overlap = query_tokens & source_tokens
-    return len(overlap) / len(query_tokens)
 
 
 @dataclass
@@ -53,6 +33,9 @@ class MultiPaperRetrievedChunk:
     page_end: int
     text_excerpt: str
     score: float
+    vector_score: float = 0.0
+    lexical_score: float = 0.0
+    retrieval_mode: str = "vector"
 
 
 @dataclass
@@ -93,6 +76,7 @@ class MultiPaperRAGService:
         paper_ids: list[int],
         top_k: int = 8,
         per_paper_limit: int = 3,
+        question: str = "",
     ) -> list[MultiPaperRetrievedChunk]:
         if not paper_ids:
             return []
@@ -125,19 +109,36 @@ class MultiPaperRAGService:
         )
         rows = result.fetchall()
 
+        # Build paper_id -> title map for lexical scoring
+        paper_titles: dict[int, str] = {}
+        for row in rows:
+            if row.paper_id not in paper_titles:
+                paper_titles[row.paper_id] = row.paper_title
+
         per_paper_count: dict[int, int] = {}
-        retrieved: list[MultiPaperRetrievedChunk] = []
+        candidates: list[MultiPaperRetrievedChunk] = []
 
         for row in rows:
             pid = row.paper_id
-            if per_paper_count.get(pid, 0) >= per_paper_limit:
-                continue
-
             text_val = row.text
             excerpt = text_val[:300] + ("..." if len(text_val) > 300 else "")
-            score = max(0.0, min(1.0, row.score))
+            vector_score = max(0.0, min(1.0, row.score))
 
-            retrieved.append(
+            # Compute lexical score if enabled
+            lexical = 0.0
+            final_score = vector_score
+            retrieval_mode = "vector"
+
+            if settings.LEXICAL_RETRIEVAL_ENABLED and question:
+                lex_result = compute_lexical_score(question, text_val, row.paper_title)
+                lexical = lex_result.score
+                final_score = compute_hybrid_score(
+                    vector_score, lexical,
+                    settings.HYBRID_VECTOR_WEIGHT, settings.HYBRID_LEXICAL_WEIGHT,
+                )
+                retrieval_mode = determine_retrieval_mode(vector_score, lexical)
+
+            candidates.append(
                 MultiPaperRetrievedChunk(
                     paper_id=pid,
                     paper_title=row.paper_title,
@@ -146,11 +147,23 @@ class MultiPaperRAGService:
                     page_start=row.page_start,
                     page_end=row.page_end,
                     text_excerpt=excerpt,
-                    score=round(score, 4),
+                    score=round(final_score, 4),
+                    vector_score=round(vector_score, 4),
+                    lexical_score=round(lexical, 4),
+                    retrieval_mode=retrieval_mode,
                 )
             )
-            per_paper_count[pid] = per_paper_count.get(pid, 0) + 1
 
+        # Sort by hybrid score, then apply per-paper limit
+        candidates.sort(key=lambda r: r.score, reverse=True)
+
+        retrieved: list[MultiPaperRetrievedChunk] = []
+        for c in candidates:
+            pid = c.paper_id
+            if per_paper_count.get(pid, 0) >= per_paper_limit:
+                continue
+            retrieved.append(c)
+            per_paper_count[pid] = per_paper_count.get(pid, 0) + 1
             if len(retrieved) >= top_k:
                 break
 
@@ -172,7 +185,8 @@ class MultiPaperRAGService:
         )
         per_paper_limit = max(top_k // 2, 2)
         return await self._retrieve_multi(
-            query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit
+            query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit,
+            question=query,
         )
 
     async def ask(
@@ -201,7 +215,8 @@ class MultiPaperRAGService:
 
         per_paper_limit = max(top_k // 2, 2)
         retrieved = await self._retrieve_multi(
-            query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit
+            query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit,
+            question=question,
         )
 
         if not retrieved:
@@ -219,7 +234,12 @@ class MultiPaperRAGService:
         confidence = min(top_score, 1.0)
         source_count = len(retrieved)
 
-        if confidence < settings.RAG_SCORE_THRESHOLD:
+        # Use appropriate score threshold based on retrieval mode
+        score_threshold = settings.RAG_SCORE_THRESHOLD
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            score_threshold = settings.LEXICAL_SCORE_THRESHOLD
+
+        if confidence < score_threshold:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, eligible_ids, "score_below_threshold",
@@ -234,7 +254,9 @@ class MultiPaperRAGService:
                 top_source_score=top_score,
             )
 
-        query_tokens = _remove_stop_words(set(_tokenize(question)))
+        # Check query tokens for evidence gate
+        from .lexical_retrieval import tokenize as lex_tokenize
+        query_tokens = set(lex_tokenize(question))
         if not query_tokens:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
@@ -250,14 +272,17 @@ class MultiPaperRAGService:
                 top_source_score=top_score,
             )
 
-        best_overlap = 0.0
+        # Check lexical evidence overlap
+        best_lexical = 0.0
         for r in retrieved:
-            source_tokens = _remove_stop_words(set(_tokenize(r.text_excerpt)))
-            overlap = _lexical_overlap(query_tokens, source_tokens)
-            if overlap > best_overlap:
-                best_overlap = overlap
+            if r.lexical_score > best_lexical:
+                best_lexical = r.lexical_score
 
-        if best_overlap < settings.RAG_EVIDENCE_THRESHOLD:
+        evidence_threshold = settings.RAG_EVIDENCE_THRESHOLD
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            evidence_threshold = settings.LEXICAL_SCORE_THRESHOLD
+
+        if best_lexical < evidence_threshold and not is_local_embedding_provider():
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, eligible_ids, "evidence_below_threshold",
@@ -271,6 +296,23 @@ class MultiPaperRAGService:
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
             )
+
+        # For local provider with lexical retrieval: check if any lexical match exists
+        if is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED:
+            if best_lexical < evidence_threshold:
+                if allow_low_confidence_answer and source_count > 0:
+                    return await self._generate_low_confidence_answer(
+                        question, retrieved, confidence, eligible_ids, "no_lexical_match",
+                    )
+                return MultiPaperAnswerResult(
+                    answer="当前论文片段不足以回答，不生成无依据答案。",
+                    status="insufficient_context",
+                    confidence=confidence,
+                    sources=retrieved,
+                    evidence_gate_reason="no_lexical_match",
+                    retrieved_source_count=source_count,
+                    top_source_score=top_score,
+                )
 
         contexts = [r.text_excerpt for r in retrieved]
         llm_start = time.monotonic()

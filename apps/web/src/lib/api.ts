@@ -98,6 +98,9 @@ export interface SourceItem {
   page_end: number;
   text_excerpt: string;
   score: number;
+  vector_score?: number;
+  lexical_score?: number;
+  retrieval_mode?: string;
 }
 
 export interface AskResponse {
@@ -400,6 +403,9 @@ export interface MultiPaperSourceItem {
   page_end: number;
   text_excerpt: string;
   score: number;
+  vector_score?: number;
+  lexical_score?: number;
+  retrieval_mode?: string;
 }
 
 export interface MultiPaperAskResponse {

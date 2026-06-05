@@ -471,7 +471,7 @@ async def test_single_ask_produces_no_duplicate_embedding_query_audit():
             svc.repo.get_chunk_count = AsyncMock(return_value=5)
             svc.repo.get_embedding_count = AsyncMock(return_value=5)
 
-            mock_retrieved = [MagicMock(score=0.9, text_excerpt="test excerpt")]
+            mock_retrieved = [MagicMock(score=0.9, text_excerpt="test excerpt", lexical_score=0.5, retrieval_mode="lexical")]
             svc._retrieve = AsyncMock(return_value=mock_retrieved)
 
             result = await svc.ask(paper_id=1, question="test question")

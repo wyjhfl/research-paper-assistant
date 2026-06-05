@@ -81,6 +81,9 @@ class SourceItem(BaseModel):
     page_end: int
     text_excerpt: str
     score: float
+    vector_score: float = 0.0
+    lexical_score: float = 0.0
+    retrieval_mode: str = "vector"
 
 
 class AskResponse(BaseModel):
@@ -123,6 +126,9 @@ class MultiPaperSourceItem(BaseModel):
     page_end: int
     text_excerpt: str
     score: float
+    vector_score: float = 0.0
+    lexical_score: float = 0.0
+    retrieval_mode: str = "vector"
 
 
 class MultiPaperAskResponse(BaseModel):
@@ -158,6 +164,9 @@ class PaperSearchResultItem(BaseModel):
     page_end: int
     text_excerpt: str
     score: float
+    vector_score: float = 0.0
+    lexical_score: float = 0.0
+    retrieval_mode: str = "vector"
 
 
 class PaperSearchResponse(BaseModel):

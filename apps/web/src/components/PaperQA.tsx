@@ -10,7 +10,14 @@ const EVIDENCE_GATE_REASON_MAP: Record<string, string> = {
   no_chunks: "论文无文本片段",
   no_embeddings: "文本片段未生成向量索引",
   no_retrieved: "未检索到相关片段",
+  no_lexical_match: "关键词无匹配",
   llm_failed: "AI 服务暂时不可用",
+};
+
+const RETRIEVAL_MODE_MAP: Record<string, string> = {
+  vector: "向量",
+  lexical: "关键词",
+  hybrid: "混合",
 };
 
 function translateGateReason(reason?: string): string | null {
@@ -182,6 +189,11 @@ export default function PaperQA({ paperId }: PaperQAProps) {
                       <span className="text-xs font-medium text-blue-600">
                         相关度: {(source.score * 100).toFixed(1)}%
                       </span>
+                      {source.retrieval_mode && (
+                        <span className="text-xs text-gray-400">
+                          检索: {RETRIEVAL_MODE_MAP[source.retrieval_mode] ?? source.retrieval_mode}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-600 leading-relaxed">
                       {source.text_excerpt}
