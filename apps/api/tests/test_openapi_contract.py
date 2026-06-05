@@ -224,6 +224,9 @@ async def test_multi_paper_ask_passes_top_k_to_service():
     mock_result.status = "answered"
     mock_result.confidence = 0.9
     mock_result.sources = []
+    mock_result.evidence_gate_reason = ""
+    mock_result.retrieved_source_count = 0
+    mock_result.top_source_score = 0.0
 
     with patch("app.routers.papers.MultiPaperRAGService") as MockRAG:
         mock_instance = MockRAG.return_value

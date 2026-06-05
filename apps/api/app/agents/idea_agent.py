@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 async def idea_node(session: AsyncSession, state: AgentState) -> AgentState:
     service = IdeaService(session)
     try:
-        candidates = await service.extract_ideas(state.paper_id, user_id=state.user_id)
+        result = await service.extract_ideas(state.paper_id, user_id=state.user_id)
     except Exception as e:
         state.status = "failed"
         state.warnings.append(f"Idea extraction failed: {str(e)}")
@@ -29,7 +29,7 @@ async def idea_node(session: AsyncSession, state: AgentState) -> AgentState:
             "source_chunk_ids": c.source_chunk_ids,
             "confidence": c.confidence,
         }
-        for c in candidates
+        for c in result.candidates
     ]
 
     if state.ideas:

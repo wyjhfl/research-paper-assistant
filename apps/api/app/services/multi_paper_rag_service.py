@@ -61,6 +61,9 @@ class MultiPaperAnswerResult:
     status: str
     confidence: float
     sources: list[MultiPaperRetrievedChunk]
+    evidence_gate_reason: str = ""
+    retrieved_source_count: int = 0
+    top_source_score: float = 0.0
 
 
 class MultiPaperRAGService:
@@ -177,6 +180,7 @@ class MultiPaperRAGService:
         question: str,
         paper_ids: list[int] | None = None,
         top_k: int = 8,
+        allow_low_confidence_answer: bool = False,
     ) -> MultiPaperAnswerResult:
         top_k = max(1, min(top_k, 20))
         eligible_ids = await self._get_eligible_paper_ids(paper_ids)
@@ -186,6 +190,9 @@ class MultiPaperRAGService:
                 status="insufficient_context",
                 confidence=0.0,
                 sources=[],
+                evidence_gate_reason="no_chunks",
+                retrieved_source_count=0,
+                top_source_score=0.0,
             )
 
         query_embedding = await self.embedding_service.embed_query(
@@ -203,26 +210,44 @@ class MultiPaperRAGService:
                 status="insufficient_context",
                 confidence=0.0,
                 sources=[],
+                evidence_gate_reason="no_retrieved",
+                retrieved_source_count=0,
+                top_source_score=0.0,
             )
 
         top_score = retrieved[0].score
         confidence = min(top_score, 1.0)
+        source_count = len(retrieved)
 
         if confidence < settings.RAG_SCORE_THRESHOLD:
+            if allow_low_confidence_answer and source_count > 0:
+                return await self._generate_low_confidence_answer(
+                    question, retrieved, confidence, eligible_ids, "score_below_threshold",
+                )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
                 status="insufficient_context",
                 confidence=confidence,
                 sources=retrieved,
+                evidence_gate_reason="score_below_threshold",
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
             )
 
         query_tokens = _remove_stop_words(set(_tokenize(question)))
         if not query_tokens:
+            if allow_low_confidence_answer and source_count > 0:
+                return await self._generate_low_confidence_answer(
+                    question, retrieved, confidence, eligible_ids, "no_query_tokens",
+                )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
                 status="insufficient_context",
                 confidence=confidence,
                 sources=retrieved,
+                evidence_gate_reason="no_query_tokens",
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
             )
 
         best_overlap = 0.0
@@ -233,11 +258,18 @@ class MultiPaperRAGService:
                 best_overlap = overlap
 
         if best_overlap < settings.RAG_EVIDENCE_THRESHOLD:
+            if allow_low_confidence_answer and source_count > 0:
+                return await self._generate_low_confidence_answer(
+                    question, retrieved, confidence, eligible_ids, "evidence_below_threshold",
+                )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
                 status="insufficient_context",
                 confidence=confidence,
                 sources=retrieved,
+                evidence_gate_reason="evidence_below_threshold",
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
             )
 
         contexts = [r.text_excerpt for r in retrieved]
@@ -277,6 +309,9 @@ class MultiPaperRAGService:
                 status="insufficient_context",
                 confidence=confidence,
                 sources=retrieved,
+                evidence_gate_reason="llm_failed",
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
             )
 
         return MultiPaperAnswerResult(
@@ -284,4 +319,68 @@ class MultiPaperRAGService:
             status="answered",
             confidence=confidence,
             sources=retrieved,
+            evidence_gate_reason="",
+            retrieved_source_count=source_count,
+            top_source_score=top_score,
         )
+
+    async def _generate_low_confidence_answer(
+        self,
+        question: str,
+        retrieved: list[MultiPaperRetrievedChunk],
+        confidence: float,
+        eligible_ids: list[int],
+        gate_reason: str,
+    ) -> MultiPaperAnswerResult:
+        contexts = [r.text_excerpt for r in retrieved]
+        source_count = len(retrieved)
+        top_score = retrieved[0].score if retrieved else 0.0
+        llm_start = time.monotonic()
+        try:
+            answer_text = await self.llm_provider.generate_answer(question, contexts)
+            await record_model_call(
+                user_id=self.user_id,
+                operation="llm_answer",
+                provider=settings.LLM_PROVIDER,
+                model=settings.LLM_MODEL,
+                status="success",
+                duration_ms=int((time.monotonic() - llm_start) * 1000),
+                input_count=len(contexts),
+                input_chars=sum(len(c) for c in contexts),
+                output_chars=len(answer_text),
+                metadata={"paper_ids": eligible_ids, "context_count": len(contexts)},
+            )
+            return MultiPaperAnswerResult(
+                answer="警告：低置信度回答，仅供参考：\n\n" + answer_text,
+                status="low_confidence_answer",
+                confidence=confidence,
+                sources=retrieved,
+                evidence_gate_reason=gate_reason,
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
+            )
+        except (ProviderConfigurationError, ProviderRequestError, ProviderResponseError) as e:
+            await record_model_call(
+                user_id=self.user_id,
+                operation="llm_answer",
+                provider=settings.LLM_PROVIDER,
+                model=settings.LLM_MODEL,
+                status="failed",
+                duration_ms=int((time.monotonic() - llm_start) * 1000),
+                input_count=len(contexts),
+                input_chars=sum(len(c) for c in contexts),
+                output_chars=0,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                metadata={"paper_ids": eligible_ids, "context_count": len(contexts)},
+            )
+            logger.exception("LLM provider failed in multi-paper low-confidence ask")
+            return MultiPaperAnswerResult(
+                answer=f"AI 服务暂时不可用，无法生成回答。错误类型：{type(e).__name__}",
+                status="insufficient_context",
+                confidence=confidence,
+                sources=retrieved,
+                evidence_gate_reason="llm_failed",
+                retrieved_source_count=source_count,
+                top_source_score=top_score,
+            )

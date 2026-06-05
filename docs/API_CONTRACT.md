@@ -491,13 +491,15 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 
 ```json
 {
-  "question": "What problem does attention solve?"
+  "question": "What problem does attention solve?",
+  "allow_low_confidence_answer": false
 }
 ```
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| question | string | 是 | 用户问题 |
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| question | string | 是 | — | 用户问题 |
+| allow_low_confidence_answer | bool | 否 | false | 允许低置信度回答（有来源但置信度低时生成尝试性回答） |
 
 **响应** (200)：
 
@@ -516,13 +518,38 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "text_excerpt": "...",
       "score": 0.82
     }
-  ]
+  ],
+  "evidence_gate_reason": "",
+  "retrieved_source_count": 5,
+  "top_source_score": 0.82
 }
 ```
 
+| 响应字段 | 类型 | 说明 |
+|----------|------|------|
+| answer | string | 回答内容 |
+| status | string | `"answered"` / `"insufficient_context"` / `"low_confidence_answer"` |
+| confidence | float | 置信度 [0, 1] |
+| sources | array | 引用来源列表 |
+| evidence_gate_reason | string | 拒答原因（空字符串=通过门控） |
+| retrieved_source_count | int | 检索到的来源数量 |
+| top_source_score | float | 最高来源相关度分数 |
+
+**evidence_gate_reason 取值**：
+- `""` — 正常回答，通过门控
+- `"no_chunks"` — 论文无文本片段
+- `"no_embeddings"` — 片段未生成向量索引
+- `"no_retrieved"` — 未检索到相关片段
+- `"score_below_threshold"` — 检索得分低于阈值
+- `"evidence_below_threshold"` — 词汇证据不足
+- `"no_query_tokens"` — 问题关键词不足
+- `"llm_failed"` — AI 服务暂时不可用
+
 **RAG 响应契约**：
-- `status` 只能是 `"answered"` 或 `"insufficient_context"`
-- `sources` 必须包含 `chunk_id`、`paper_id`、`page_start`、`page_end`、`text_excerpt`、`score`
+- `status` 为 `"answered"` / `"insufficient_context"` / `"low_confidence_answer"`
+- 默认 strict 模式：证据不足时返回 `insufficient_context`，不编造答案
+- `allow_low_confidence_answer=true`：当 `source_count > 0` 但置信度低时，允许生成尝试性回答（`status=low_confidence_answer`），回答前缀"警告：低置信度回答，仅供参考："
+- `source_count=0` 时即使 `allow_low_confidence_answer=true` 也拒答
 - `insufficient_context` 时 `answer` 为固定提示，不允许编造答案
 - `confidence` 范围 [0, 1]
 
@@ -544,7 +571,8 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 {
   "question": "How can RAG and multi-agent workflows support research?",
   "paper_ids": [1, 2],
-  "top_k": 8
+  "top_k": 8,
+  "allow_low_confidence_answer": false
 }
 ```
 
@@ -553,6 +581,7 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 | question | string | 是 | — | 用户问题 |
 | paper_ids | int[] | 否 | null | 限定论文 ID 列表，null 表示全库检索，最多 50 个 |
 | top_k | int | 否 | 8 | 检索 top-k chunk，范围 [1, 20] |
+| allow_low_confidence_answer | bool | 否 | false | 允许低置信度回答 |
 
 **响应** (200)：
 
@@ -572,14 +601,18 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "text_excerpt": "...",
       "score": 0.79
     }
-  ]
+  ],
+  "evidence_gate_reason": "",
+  "retrieved_source_count": 8,
+  "top_source_score": 0.79
 }
 ```
 
 **跨论文 RAG 响应契约**：
-- `status` 只能是 `"answered"` 或 `"insufficient_context"`
+- `status` 为 `"answered"` / `"insufficient_context"` / `"low_confidence_answer"`
 - `sources` 必须包含 `paper_title`（跨论文独有字段）
 - `insufficient_context` 不允许编造答案
+- `allow_low_confidence_answer` 行为与单论文 ask 一致
 
 **用户隔离**：全库检索只检索当前 user_id 的 completed papers；paper_ids 过滤校验归属当前 user_id。
 
@@ -644,13 +677,20 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 
 ### POST /papers/{paper_id}/ideas/extract
 
-用途：从论文中抽取研究 Idea 候选。
+用途：从论文中抽取研究 Idea 候选。默认先运行启发式抽取，启发式无结果时可选 LLM fallback。
 
 **路径参数**：
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | paper_id | int | 论文 ID |
+
+**查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| use_llm_fallback | bool | 否 | true | 启发式无结果时是否使用 LLM fallback |
+| max_ideas | int | 否 | 3 | 最大 idea 数量，范围 [1, 10] |
 
 **响应** (200)：
 
@@ -665,17 +705,96 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
       "method_hint": "Compare sparse vs dense attention...",
       "tags": ["attention", "efficiency"],
       "source_chunk_ids": [3, 5],
-      "confidence": 0.72
+      "confidence": 0.72,
+      "extraction_method": "heuristic"
+    }
+  ],
+  "reason": "",
+  "suggestions": [],
+  "extraction_method": "heuristic"
+}
+```
+
+| 响应字段 | 类型 | 说明 |
+|----------|------|------|
+| paper_id | int | 论文 ID |
+| candidates | array | Idea 候选列表 |
+| reason | string | 无 idea 时的原因说明 |
+| suggestions | string[] | 建议操作列表 |
+| extraction_method | string | `"heuristic"` / `"llm_fallback"` / `""` |
+
+**extraction_method 取值**：
+- `"heuristic"` — 启发式抽取成功
+- `"llm_fallback"` — 启发式无结果，LLM fallback 成功
+- `""` — 无结果（无 chunks 等）
+
+**抽取流程**：
+1. 先运行启发式抽取（基于文本模式匹配）
+2. 启发式有结果 → 直接返回，不调用 LLM
+3. 启发式无结果 + `use_llm_fallback=true` → 调用 LLM 生成 idea
+4. 启发式无结果 + `use_llm_fallback=false` → 返回 reason + suggestions
+5. LLM 返回非法 JSON → 返回 reason（不伪造 idea candidate）
+
+**用户隔离**：只能对当前 user_id 的论文抽取 Idea。
+
+**常见错误**：404 — 论文不存在；400 — 论文未完成
+
+**是否依赖真实模型**：LLM fallback 依赖 provider
+
+---
+
+### POST /papers/ideas/synthesize
+
+用途：跨论文研究 idea 合成，基于多论文上下文生成跨论文研究方向。
+
+**请求体**：
+
+```json
+{
+  "paper_ids": [1, 2],
+  "max_ideas": 3
+}
+```
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| paper_ids | int[] | 是 | — | 论文 ID 列表，最少 2 个，最多 10 个 |
+| max_ideas | int | 否 | 3 | 最大 idea 数量，范围 [1, 5] |
+
+**响应** (200)：
+
+```json
+{
+  "ideas": [
+    {
+      "title": "Cross-domain Transfer Learning",
+      "summary": "Combine insights from multiple domains...",
+      "motivation": "Bridging NLP and CV approaches...",
+      "involved_paper_ids": [1, 2],
+      "confidence": 0.7,
+      "extraction_method": "cross_paper_synthesis"
     }
   ]
 }
 ```
 
-**用户隔离**：只能对当前 user_id 的论文抽取 Idea。
+| 响应字段 | 类型 | 说明 |
+|----------|------|------|
+| ideas | array | 跨论文 idea 列表 |
+| ideas[].title | string | Idea 标题 |
+| ideas[].summary | string | Idea 摘要 |
+| ideas[].motivation | string | 研究动机 |
+| ideas[].involved_paper_ids | int[] | 涉及的论文 ID |
+| ideas[].confidence | float | 置信度 [0, 1] |
+| ideas[].extraction_method | string | 固定 `"cross_paper_synthesis"` |
 
-**常见错误**：404 — 论文不存在
+**用户隔离**：只能使用当前 user_id 的论文。
 
-**是否依赖真实模型**：LLM 生成 Idea 依赖 provider
+**常见错误**：
+- 404 — paper_ids 包含不存在的论文 ID
+- 422 — paper_ids 少于 2 个
+
+**是否依赖真实模型**：LLM 生成依赖 provider
 
 ---
 

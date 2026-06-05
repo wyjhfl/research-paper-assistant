@@ -11,11 +11,15 @@ class IdeaCandidateItem(BaseModel):
     tags: list[str]
     source_chunk_ids: list[int]
     confidence: float = Field(ge=0.0, le=1.0)
+    extraction_method: str = "heuristic"
 
 
 class ExtractIdeasResponse(BaseModel):
     paper_id: int
     candidates: list[IdeaCandidateItem]
+    reason: str = ""
+    suggestions: list[str] = Field(default_factory=list)
+    extraction_method: str = ""
 
 
 class SaveIdeaRequest(BaseModel):
@@ -103,3 +107,21 @@ class SaveIdeaResponse(BaseModel):
     status: str
     created_at: datetime
     sources: list[IdeaSourceItem]
+
+
+class CrossPaperIdeaRequest(BaseModel):
+    paper_ids: list[int] = Field(..., min_length=2, max_length=10)
+    max_ideas: int = Field(default=3, ge=1, le=5)
+
+
+class CrossPaperIdeaItem(BaseModel):
+    title: str
+    summary: str
+    motivation: str
+    involved_paper_ids: list[int]
+    confidence: float = Field(ge=0.0, le=1.0)
+    extraction_method: str = "cross_paper_synthesis"
+
+
+class CrossPaperIdeaResponse(BaseModel):
+    ideas: list[CrossPaperIdeaItem]

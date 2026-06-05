@@ -62,6 +62,7 @@ class PaperUploadResponse(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1)
+    allow_low_confidence_answer: bool = False
 
     @field_validator("question")
     @classmethod
@@ -84,9 +85,12 @@ class SourceItem(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
-    status: Literal["answered", "insufficient_context"]
+    status: Literal["answered", "insufficient_context", "low_confidence_answer"]
     confidence: float
     sources: list[SourceItem]
+    evidence_gate_reason: str = ""
+    retrieved_source_count: int = 0
+    top_source_score: float = 0.0
 
 
 class EmbeddingRebuildResponse(BaseModel):
@@ -99,6 +103,7 @@ class MultiPaperAskRequest(BaseModel):
     question: str = Field(..., min_length=1)
     paper_ids: list[int] | None = Field(default=None, max_length=50)
     top_k: int = Field(default=8, ge=1, le=20)
+    allow_low_confidence_answer: bool = False
 
     @field_validator("question")
     @classmethod
@@ -122,9 +127,12 @@ class MultiPaperSourceItem(BaseModel):
 
 class MultiPaperAskResponse(BaseModel):
     answer: str
-    status: Literal["answered", "insufficient_context"]
+    status: Literal["answered", "insufficient_context", "low_confidence_answer"]
     confidence: float
     sources: list[MultiPaperSourceItem]
+    evidence_gate_reason: str = ""
+    retrieved_source_count: int = 0
+    top_source_score: float = 0.0
 
 
 class PaperSearchRequest(BaseModel):

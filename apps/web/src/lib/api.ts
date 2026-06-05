@@ -102,9 +102,12 @@ export interface SourceItem {
 
 export interface AskResponse {
   answer: string;
-  status: "answered" | "insufficient_context";
+  status: "answered" | "insufficient_context" | "low_confidence_answer";
   confidence: number;
   sources: SourceItem[];
+  evidence_gate_reason?: string;
+  retrieved_source_count?: number;
+  top_source_score?: number;
 }
 
 export interface EmbeddingRebuildResponse {
@@ -220,11 +223,15 @@ export async function uploadPaper(file: File, asyncMode: boolean = true): Promis
   });
 }
 
-export async function askPaper(paperId: number, question: string): Promise<AskResponse> {
+export async function askPaper(paperId: number, question: string, allowLowConfidence: boolean = false): Promise<AskResponse> {
+  const body: Record<string, unknown> = { question };
+  if (allowLowConfidence) {
+    body.allow_low_confidence_answer = true;
+  }
   return apiFetch<AskResponse>(`/papers/${paperId}/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -397,9 +404,12 @@ export interface MultiPaperSourceItem {
 
 export interface MultiPaperAskResponse {
   answer: string;
-  status: "answered" | "insufficient_context";
+  status: "answered" | "insufficient_context" | "low_confidence_answer";
   confidence: number;
   sources: MultiPaperSourceItem[];
+  evidence_gate_reason?: string;
+  retrieved_source_count?: number;
+  top_source_score?: number;
 }
 
 export interface PaperSearchResponse {
@@ -410,11 +420,16 @@ export async function multiPaperAsk(
   question: string,
   paperIds?: number[],
   topK: number = 8,
+  allowLowConfidence: boolean = false,
 ): Promise<MultiPaperAskResponse> {
+  const body: Record<string, unknown> = { question, paper_ids: paperIds || null, top_k: topK };
+  if (allowLowConfidence) {
+    body.allow_low_confidence_answer = true;
+  }
   return apiFetch<MultiPaperAskResponse>("/papers/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, paper_ids: paperIds || null, top_k: topK }),
+    body: JSON.stringify(body),
   });
 }
 

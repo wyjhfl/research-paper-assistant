@@ -3,6 +3,21 @@
 import { useState } from "react";
 import { askPaper, getErrorMessage, type AskResponse, type SourceItem } from "@/lib/api";
 
+const EVIDENCE_GATE_REASON_MAP: Record<string, string> = {
+  score_below_threshold: "检索得分低于阈值",
+  evidence_below_threshold: "词汇证据不足",
+  no_query_tokens: "问题关键词不足",
+  no_chunks: "论文无文本片段",
+  no_embeddings: "文本片段未生成向量索引",
+  no_retrieved: "未检索到相关片段",
+  llm_failed: "AI 服务暂时不可用",
+};
+
+function translateGateReason(reason?: string): string | null {
+  if (!reason) return null;
+  return EVIDENCE_GATE_REASON_MAP[reason] ?? reason;
+}
+
 interface PaperQAProps {
   paperId: number;
 }
@@ -12,6 +27,7 @@ export default function PaperQA({ paperId }: PaperQAProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [allowLowConfidence, setAllowLowConfidence] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +38,7 @@ export default function PaperQA({ paperId }: PaperQAProps) {
     setResult(null);
 
     try {
-      const res = await askPaper(paperId, question);
+      const res = await askPaper(paperId, question, allowLowConfidence);
       setResult(res);
     } catch (err) {
       setError(getErrorMessage(err, "问答请求失败"));
@@ -55,6 +71,15 @@ export default function PaperQA({ paperId }: PaperQAProps) {
             {loading ? "思考中..." : "提问"}
           </button>
         </div>
+        <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allowLowConfidence}
+            onChange={(e) => setAllowLowConfidence(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-600">允许低置信度回答</span>
+        </label>
       </form>
 
       {error && (
@@ -66,29 +91,67 @@ export default function PaperQA({ paperId }: PaperQAProps) {
       {result && (
         <div className="px-6 pb-6">
           <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <span
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                   result.status === "answered"
                     ? "bg-green-100 text-green-700"
-                    : "bg-yellow-100 text-yellow-700"
+                    : result.status === "low_confidence_answer"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-yellow-100 text-yellow-700"
                 }`}
               >
-                {result.status === "answered" ? "已回答" : "上下文不足"}
+                {result.status === "answered"
+                  ? "已回答"
+                  : result.status === "low_confidence_answer"
+                    ? "低置信度回答"
+                    : "上下文不足"}
               </span>
-              {result.status === "answered" && (
+              <span className="text-xs text-gray-500">
+                置信度: {(result.confidence * 100).toFixed(1)}%
+              </span>
+              <span className="text-xs text-gray-500">
+                来源: {result.sources.length}
+              </span>
+              {result.top_source_score != null && (
                 <span className="text-xs text-gray-500">
-                  置信度: {(result.confidence * 100).toFixed(1)}%
+                  最高相关度: {(result.top_source_score * 100).toFixed(1)}%
                 </span>
               )}
             </div>
+
+            {result.status === "low_confidence_answer" && (
+              <div className="mb-2 p-3 bg-amber-50 border border-amber-300 rounded-md">
+                <p className="text-sm font-medium text-amber-800">
+                  警告：低置信度回答，仅供参考
+                </p>
+              </div>
+            )}
+
             <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
               {result.answer}
             </p>
+
             {result.status === "insufficient_context" && (
-              <p className="mt-2 text-xs text-yellow-600">
-                当前论文片段不足以回答，不生成无依据答案。
-              </p>
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-700 font-medium">
+                  检索到了 {result.retrieved_source_count ?? result.sources.length} 个片段，但置信度低于阈值
+                </p>
+                {translateGateReason(result.evidence_gate_reason) && (
+                  <p className="text-sm text-yellow-600 mt-1">
+                    原因：{translateGateReason(result.evidence_gate_reason)}
+                  </p>
+                )}
+                <div className="mt-2 text-sm text-yellow-600">
+                  <p className="font-medium">建议：</p>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5">
+                    <li>换更具体的问题</li>
+                    <li>上传完整论文</li>
+                    <li>尝试低置信度回答</li>
+                    <li>后续接入真实 embedding</li>
+                  </ul>
+                </div>
+              </div>
             )}
           </div>
 

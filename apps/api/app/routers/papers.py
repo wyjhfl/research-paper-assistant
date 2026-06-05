@@ -25,7 +25,7 @@ from ..schemas.paper import (
     PaperSearchRequest,
     PaperSearchResponse,
 )
-from ..schemas.idea import ExtractIdeasResponse
+from ..schemas.idea import ExtractIdeasResponse, CrossPaperIdeaRequest, CrossPaperIdeaResponse
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ async def ask_paper(
 
     rag = RAGService(db, user_id=user_id)
     try:
-        result = await rag.ask(paper_id, req.question)
+        result = await rag.ask(paper_id, req.question, allow_low_confidence_answer=req.allow_low_confidence_answer)
     except PaperNotFoundError:
         raise HTTPException(status_code=404, detail="Paper not found")
     except PaperNotReadyError as e:
@@ -170,6 +170,9 @@ async def ask_paper(
             }
             for s in result.sources
         ],
+        "evidence_gate_reason": result.evidence_gate_reason,
+        "retrieved_source_count": result.retrieved_source_count,
+        "top_source_score": result.top_source_score,
     }
 
 
@@ -208,6 +211,8 @@ async def rebuild_embeddings(
 @router.post("/{paper_id}/ideas/extract", response_model=ExtractIdeasResponse)
 async def extract_ideas(
     paper_id: int,
+    use_llm_fallback: bool = Query(True),
+    max_ideas: int = Query(3, ge=1, le=10),
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_user_id),
 ):
@@ -218,7 +223,7 @@ async def extract_ideas(
 
     idea_service = IdeaService(db)
     try:
-        candidates = await idea_service.extract_ideas(paper_id, user_id=user_id)
+        result = await idea_service.extract_ideas(paper_id, user_id=user_id, use_llm_fallback=use_llm_fallback, max_ideas=max_ideas)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -233,9 +238,13 @@ async def extract_ideas(
                 "tags": c.tags,
                 "source_chunk_ids": c.source_chunk_ids,
                 "confidence": c.confidence,
+                "extraction_method": c.extraction_method,
             }
-            for c in candidates
+            for c in result.candidates
         ],
+        "reason": result.reason,
+        "suggestions": result.suggestions,
+        "extraction_method": result.extraction_method,
     }
 
 
@@ -256,7 +265,7 @@ async def multi_paper_ask(
 
     rag = MultiPaperRAGService(db, user_id=user_id)
     try:
-        result = await rag.ask(question=req.question, paper_ids=paper_ids, top_k=req.top_k)
+        result = await rag.ask(question=req.question, paper_ids=paper_ids, top_k=req.top_k, allow_low_confidence_answer=req.allow_low_confidence_answer)
     except (ProviderConfigurationError, ProviderRequestError, ProviderResponseError):
         logger.exception("AI provider failed for multi-paper ask")
         raise HTTPException(status_code=503, detail="AI provider unavailable")
@@ -278,6 +287,9 @@ async def multi_paper_ask(
             }
             for s in result.sources
         ],
+        "evidence_gate_reason": result.evidence_gate_reason,
+        "retrieved_source_count": result.retrieved_source_count,
+        "top_source_score": result.top_source_score,
     }
 
 
@@ -316,5 +328,41 @@ async def search_papers(
                 "score": r.score,
             }
             for r in results
+        ],
+    }
+
+
+@router.post("/ideas/synthesize", response_model=CrossPaperIdeaResponse)
+async def synthesize_ideas(
+    req: CrossPaperIdeaRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    repo = PaperRepository(db)
+    for pid in req.paper_ids:
+        p = await repo.get_paper(pid, user_id=user_id)
+        if p is None:
+            raise HTTPException(status_code=404, detail=f"Paper {pid} not found")
+
+    idea_service = IdeaService(db)
+    try:
+        ideas = await idea_service.synthesize_ideas(
+            paper_ids=req.paper_ids, user_id=user_id, max_ideas=req.max_ideas,
+        )
+    except (ProviderConfigurationError, ProviderRequestError, ProviderResponseError):
+        logger.exception("AI provider failed for idea synthesis")
+        raise HTTPException(status_code=503, detail="AI provider unavailable")
+
+    return {
+        "ideas": [
+            {
+                "title": idea.title,
+                "summary": idea.summary,
+                "motivation": idea.motivation,
+                "involved_paper_ids": idea.involved_paper_ids,
+                "confidence": idea.confidence,
+                "extraction_method": idea.extraction_method,
+            }
+            for idea in ideas
         ],
     }
