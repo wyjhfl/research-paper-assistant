@@ -574,6 +574,19 @@ def test_ops_check_no_cleanup_confirm():
     assert "--confirm" not in content
 
 
+def test_ops_check_storage_audit_parses_json_counts():
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    ops_check = project_root / "scripts" / "ops_check.ps1"
+    if not ops_check.exists():
+        pytest.skip("ops_check.ps1 not found")
+    content = ops_check.read_text(encoding="utf-8")
+    assert "ConvertFrom-Json" in content, "ops_check.ps1 must parse storage_audit JSON"
+    assert "missing_count" in content, "storage missing files must be inspected"
+    assert "orphan_count" in content, "storage orphan files must be inspected"
+    assert "storage_audit missing files" in content, "missing storage files must fail ops_check"
+    assert "storage orphan_count > 0" in content, "orphan storage files must warn"
+
+
 def test_production_check_no_cleanup_confirm():
     project_root = Path(__file__).resolve().parent.parent.parent.parent
     prod_check = project_root / "apps" / "api" / "scripts" / "production_check.py"

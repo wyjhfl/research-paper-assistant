@@ -13,6 +13,7 @@ function Invoke-Check {
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host "  [$script:step/$totalSteps] $Name" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor Cyan
+    $warnCountBefore = $script:warnCount
     try {
         $result = & $Action
         if ($LASTEXITCODE -ne 0 -and $Critical) {
@@ -21,6 +22,8 @@ function Invoke-Check {
         } elseif ($LASTEXITCODE -ne 0 -and -not $Critical) {
             Write-Host "WARN: $Name" -ForegroundColor Yellow
             $script:warnCount++
+        } elseif ($script:warnCount -gt $warnCountBefore) {
+            Write-Host "WARN: $Name" -ForegroundColor Yellow
         } else {
             Write-Host "PASS: $Name" -ForegroundColor Green
         }
@@ -102,6 +105,15 @@ Invoke-Check "Storage audit" {
     $result = docker compose exec -T backend python scripts/storage_audit.py 2>&1 | ForEach-Object { $_.ToString() }
     $result
     if ($LASTEXITCODE -ne 0) { throw "storage_audit failed" }
+    $auditJson = $result -join "`n"
+    $audit = $auditJson | ConvertFrom-Json -ErrorAction Stop
+    if ($audit.missing_count -gt 0) {
+        throw "storage_audit missing files: $($audit.missing_count)"
+    }
+    if ($audit.orphan_count -gt 0) {
+        Write-Host "WARN: storage orphan_count > 0 ($($audit.orphan_count)); review cleanup_storage dry-run manually" -ForegroundColor Yellow
+        $script:warnCount++
+    }
 }
 
 Write-Host ""

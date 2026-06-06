@@ -8,9 +8,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pypdf import PdfWriter
 
+from app.config import settings
 from app.database import async_session, init_db
 from app.models import Paper, PaperChunk, Idea, IdeaSource
 from app.services.ai_provider import get_embedding_provider
@@ -329,6 +330,38 @@ DEMO_IDEAS = [
 ]
 
 
+def _demo_storage_target(file_path: str) -> Path:
+    storage_path = Path(settings.STORAGE_PATH)
+    path = Path(file_path)
+
+    if path.is_absolute():
+        try:
+            rel_path = path.resolve().relative_to(storage_path.resolve())
+        except ValueError:
+            rel_path = Path(path.name)
+    else:
+        parts = path.parts
+        if parts and parts[0] in {storage_path.name, "storage"} and len(parts) > 1:
+            rel_path = Path(*parts[1:])
+        else:
+            rel_path = path
+
+    return storage_path / rel_path
+
+
+def _ensure_demo_storage_file(file_path: str) -> bool:
+    target = _demo_storage_target(file_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        return False
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with target.open("wb") as fh:
+        writer.write(fh)
+    return True
+
+
 async def seed_demo():
     await init_db()
 
@@ -336,6 +369,8 @@ async def seed_demo():
 
     created_papers = 0
     skipped_papers = 0
+    created_storage_files = 0
+    skipped_storage_files = 0
     created_chunks = 0
     created_ideas = 0
     skipped_ideas = 0
@@ -344,6 +379,13 @@ async def seed_demo():
         paper_records: list[Paper] = []
 
         for paper_data in DEMO_PAPERS:
+            storage_created = _ensure_demo_storage_file(paper_data["file_path"])
+            if storage_created:
+                print(f"  CREATED demo storage file: {_demo_storage_target(paper_data['file_path']).relative_to(Path(settings.STORAGE_PATH))}")
+                created_storage_files += 1
+            else:
+                skipped_storage_files += 1
+
             existing = await session.execute(
                 select(Paper).where(Paper.filename == paper_data["filename"])
             )
@@ -445,6 +487,7 @@ async def seed_demo():
     print("Seed Demo Summary")
     print("=" * 60)
     print(f"  Papers:  {created_papers} created, {skipped_papers} skipped")
+    print(f"  Files:   {created_storage_files} created, {skipped_storage_files} skipped")
     print(f"  Chunks:  {created_chunks} created")
     print(f"  Ideas:   {created_ideas} created, {skipped_ideas} skipped")
     print("=" * 60)

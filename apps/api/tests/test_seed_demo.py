@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 import pytest_asyncio
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import Paper, PaperChunk, Idea, IdeaSource
 from app.services.ai_provider import get_embedding_provider
-from scripts.seed_demo import DEMO_PAPERS, DEMO_IDEAS
+from scripts.seed_demo import DEMO_PAPERS, DEMO_IDEAS, _demo_storage_target, _ensure_demo_storage_file
 from scripts.reset_demo import DEMO_FILENAMES
 
 from tests.conftest import _test_session_factory
@@ -21,6 +22,25 @@ async def test_seed_demo_importable():
     for paper_data in DEMO_PAPERS:
         assert paper_data["filename"].startswith("demo_")
         assert len(paper_data["chunks"]) >= 3
+
+
+def test_seed_demo_file_paths_are_under_storage():
+    with MonkeyPatch.context() as mp:
+        mp.setattr(settings, "STORAGE_PATH", "/app/storage")
+        for paper_data in DEMO_PAPERS:
+            target = _demo_storage_target(paper_data["file_path"])
+            assert str(target).replace("\\", "/").startswith("/app/storage/")
+
+
+def test_seed_demo_creates_placeholder_storage_file(tmp_path):
+    with MonkeyPatch.context() as mp:
+        mp.setattr(settings, "STORAGE_PATH", str(tmp_path))
+        created = _ensure_demo_storage_file("storage/demo/example.pdf")
+        target = tmp_path / "demo" / "example.pdf"
+        assert created is True
+        assert target.exists()
+        assert target.read_bytes().startswith(b"%PDF")
+        assert _ensure_demo_storage_file("storage/demo/example.pdf") is False
 
 
 @pytest.mark.asyncio
