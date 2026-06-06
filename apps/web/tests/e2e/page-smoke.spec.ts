@@ -135,9 +135,53 @@ test.describe("/papers/[id] detail UX", () => {
     await main.locator('button:has-text("核心贡献")').click();
     await main.locator('button:has-text("提问")').click();
     await expect(main.locator('a:has-text("定位片段")')).toBeVisible();
+    await expect(main).toContainText("证据质量摘要");
+    await expect(main).toContainText("平均相关度: 70.0%");
     await expect(main).toContainText("关键词: 80.0%");
+    await main.locator('button:has-text("展开片段")').click();
+    await expect(main.locator('button:has-text("收起片段")')).toBeVisible();
     await expect(main.locator('button:has-text("复制回答")')).toBeVisible();
+    await expect(main.locator('button:has-text("复制片段")')).toBeVisible();
     await expect(main).toContainText("继续追问");
+  });
+
+  test("hash 定位片段时高亮当前片段并可展开全文", async ({ page }) => {
+    await page.route("**/papers/1", async (route) => {
+      if (route.request().method() !== "GET" || route.request().resourceType() === "document") {
+        return route.continue();
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          paper: {
+            id: 1,
+            title: "Paper Alpha",
+            filename: "alpha.pdf",
+            status: "completed",
+            error_message: null,
+            chunk_count: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+          chunks: [
+            {
+              id: 10,
+              chunk_index: 0,
+              text: "This paper proposes a retrieval augmented research workflow with limitations and future work.",
+              page_start: 1,
+              page_end: 1,
+              section_title: null,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("/papers/1#chunk-10");
+    const main = getAppMain(page);
+    await expect(main).toContainText("当前定位");
+    await expect(main.locator('button:has-text("收起全文")')).toBeVisible();
   });
 });
 
@@ -230,6 +274,8 @@ test.describe("/papers/ask", () => {
     await expect(main.locator('button:has-text("复制回答")')).toBeVisible();
     await expect(main).toContainText("继续追问");
     await expect(main.locator('a:has-text("定位片段")')).toBeVisible();
+    await expect(main).toContainText("证据质量摘要");
+    await expect(main).toContainText("检索模式: 混合 1");
     await expect(main).toContainText("关键词: 75.0%");
   });
 

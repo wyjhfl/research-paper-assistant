@@ -8,9 +8,9 @@ import {
   getErrorMessage,
   MULTI_PAPER_QUESTION_PRESETS,
   type MultiPaperAskResponse,
-  type MultiPaperSourceItem,
   type PaperListItem,
 } from "@/lib/api";
+import EvidenceSourcesPanel from "@/components/EvidenceSourcesPanel";
 
 const EVIDENCE_GATE_REASON_MAP: Record<string, string> = {
   score_below_threshold: "检索得分低于阈值",
@@ -21,12 +21,6 @@ const EVIDENCE_GATE_REASON_MAP: Record<string, string> = {
   no_retrieved: "未检索到相关片段",
   no_lexical_match: "关键词无匹配",
   llm_failed: "AI 服务暂时不可用",
-};
-
-const RETRIEVAL_MODE_MAP: Record<string, string> = {
-  vector: "向量",
-  lexical: "关键词",
-  hybrid: "混合",
 };
 
 const FOLLOW_UPS = [
@@ -370,57 +364,7 @@ export default function MultiPaperQA() {
             )}
           </div>
 
-            {result.sources.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-600 mb-3">
-                  引用来源 ({result.sources.length})
-                </h3>
-                <div className="space-y-3">
-                  {result.sources.map((source: MultiPaperSourceItem, idx: number) => (
-                    <div
-                      key={source.chunk_id}
-                      className="p-3 sm:p-4 border border-gray-200 rounded-lg"
-                    >
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="text-xs font-medium text-gray-400">
-                          #{idx + 1}
-                        </span>
-                        <span className="text-sm font-bold text-blue-600">
-                          {source.paper_title}
-                        </span>
-                        <Link
-                          href={`/papers/${source.paper_id}#chunk-${source.chunk_id}`}
-                          className="text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          定位片段
-                        </Link>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs text-gray-500">
-                        <span>第 {source.page_start} 至 {source.page_end} 页</span>
-                        <span>片段 #{source.chunk_index}</span>
-                        <span className="font-medium text-blue-600">
-                          相关度: {(source.score * 100).toFixed(1)}%
-                        </span>
-                        {source.lexical_score != null && (
-                          <span>关键词: {(source.lexical_score * 100).toFixed(1)}%</span>
-                        )}
-                        {source.vector_score != null && (
-                          <span>向量: {(source.vector_score * 100).toFixed(1)}%</span>
-                        )}
-                        {source.retrieval_mode && (
-                          <span>
-                            检索: {RETRIEVAL_MODE_MAP[source.retrieval_mode] ?? source.retrieval_mode}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-4">
-                        {source.text_excerpt}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <EvidenceSourcesPanel sources={result.sources} />
           </div>
           {result.status !== "insufficient_context" && (
           <div className="mx-4 sm:mx-6 mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3">

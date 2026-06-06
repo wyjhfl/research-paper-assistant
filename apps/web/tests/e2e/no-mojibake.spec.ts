@@ -46,6 +46,7 @@ const SCAN_FILES = [
   "src/app/register/page.tsx",
   "src/app/jobs/page.tsx",
   "src/components/EmptyState.tsx",
+  "src/components/EvidenceSourcesPanel.tsx",
   "src/components/IdeaExtractor.tsx",
   "src/components/MultiPaperQA.tsx",
   "src/components/PaperDetailClient.tsx",

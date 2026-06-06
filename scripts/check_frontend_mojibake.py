@@ -45,6 +45,7 @@ SCAN_FILES = [
     "apps/web/src/app/register/page.tsx",
     "apps/web/src/app/jobs/page.tsx",
     "apps/web/src/components/EmptyState.tsx",
+    "apps/web/src/components/EvidenceSourcesPanel.tsx",
     "apps/web/src/components/IdeaExtractor.tsx",
     "apps/web/src/components/MultiPaperQA.tsx",
     "apps/web/src/components/PaperDetailClient.tsx",

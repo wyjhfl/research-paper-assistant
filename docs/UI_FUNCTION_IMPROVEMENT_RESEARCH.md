@@ -49,6 +49,11 @@ The strongest patterns from comparable research assistants are:
 - Added cross-paper "select all completed" action.
 - Added source jump links from answer citations to paper chunks.
 - Exposed lexical and vector scores in citation metadata.
+- Added an evidence quality summary for answer sources: top score, average
+  score, lexical/vector maxima, and retrieval mode distribution.
+- Added expandable/copyable source cards for single-paper and cross-paper QA.
+- Added hash-target chunk highlighting on the paper detail page so citation
+  jumps make the active chunk visible and expanded.
 - Added follow-up question chips after successful answers.
 - Changed copy behavior to copy the answer plus compact source metadata.
 - Added Idea extraction controls for LLM fallback and max idea count.
@@ -126,6 +131,11 @@ Validation:
 
 - No horizontal overflow on mobile.
 - Source jump links remain stable.
+
+Status: **Landed in practical form.** Answer source cards now include an
+evidence summary, expandable excerpts, copy buttons, and stable links back to
+paper chunks. The paper detail page highlights and expands the active chunk
+when opened with `#chunk-...`.
 
 ## Sources consulted
 

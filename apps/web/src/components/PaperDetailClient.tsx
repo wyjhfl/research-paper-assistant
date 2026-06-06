@@ -18,6 +18,8 @@ export default function PaperDetailClient({ paperId }: PaperDetailClientProps) {
   const [chunks, setChunks] = useState<ChunkExcerpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeChunkId, setActiveChunkId] = useState<number | null>(null);
+  const [expandedChunkIds, setExpandedChunkIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +42,40 @@ export default function PaperDetailClient({ paperId }: PaperDetailClientProps) {
       cancelled = true;
     };
   }, [paperId]);
+
+  useEffect(() => {
+    function applyHash() {
+      const match = window.location.hash.match(/^#chunk-(\d+)$/);
+      const nextChunkId = match ? Number(match[1]) : null;
+      setActiveChunkId(nextChunkId);
+      if (nextChunkId != null) {
+        setExpandedChunkIds((prev) => {
+          const next = new Set(prev);
+          next.add(nextChunkId);
+          return next;
+        });
+        window.setTimeout(() => {
+          document.getElementById(`chunk-${nextChunkId}`)?.scrollIntoView({
+            block: "center",
+            behavior: "smooth",
+          });
+        }, 80);
+      }
+    }
+
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  function toggleChunkExpanded(chunkId: number) {
+    setExpandedChunkIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chunkId)) next.delete(chunkId);
+      else next.add(chunkId);
+      return next;
+    });
+  }
 
   if (loading) {
     return (
@@ -115,21 +151,46 @@ export default function PaperDetailClient({ paperId }: PaperDetailClientProps) {
             <div className="px-5 pb-3 text-xs text-gray-500">
               片段用于回答和 Idea 抽取。当前仅展示预览，引用来源会显示 chunk 编号和页码。
               {hasLongChunks ? " 较长片段已折叠为三行预览。" : ""}
+              {activeChunkId != null ? " 已定位的片段会自动高亮并展开。" : ""}
             </div>
           )}
           <div className="max-h-[34rem] divide-y divide-gray-100 overflow-y-auto">
-            {chunks.map((chunk) => (
-              <div key={chunk.id} id={`chunk-${chunk.id}`} className="scroll-mt-20 px-5 py-3">
+            {chunks.map((chunk) => {
+              const isActive = activeChunkId === chunk.id;
+              const isExpanded = expandedChunkIds.has(chunk.id);
+              return (
+              <div
+                key={chunk.id}
+                id={`chunk-${chunk.id}`}
+                className={`scroll-mt-20 px-5 py-3 transition-colors ${
+                  isActive ? "bg-blue-50 ring-1 ring-inset ring-blue-200" : ""
+                }`}
+              >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="text-xs font-medium text-gray-500">Chunk #{chunk.chunk_index}</span>
                   <span className="text-xs text-gray-400">第 {chunk.page_start}-{chunk.page_end} 页</span>
                   {chunk.section_title && (
                     <span className="text-xs text-blue-600">{chunk.section_title}</span>
                   )}
+                  {isActive && (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      当前定位
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleChunkExpanded(chunk.id)}
+                    className="ml-auto rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    {isExpanded ? "收起全文" : "展开全文"}
+                  </button>
                 </div>
-                <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">{chunk.text}</p>
+                <p className={`text-xs text-gray-600 leading-relaxed ${isExpanded ? "" : "line-clamp-3"}`}>
+                  {chunk.text}
+                </p>
               </div>
-            ))}
+              );
+            })}
           </div>
         </details>
       </div>
