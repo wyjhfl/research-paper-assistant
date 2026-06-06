@@ -59,6 +59,37 @@ test.describe("/papers", () => {
 
 test.describe("/papers/[id] detail UX", () => {
   test("后端可用时显示单论文问题模板、Idea fallback 参数和片段定位", async ({ page }) => {
+    await page.route("**/papers/1", async (route) => {
+      if (route.request().method() !== "GET" || route.request().resourceType() === "document") {
+        return route.continue();
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          paper: {
+            id: 1,
+            title: "Paper Alpha",
+            filename: "alpha.pdf",
+            status: "completed",
+            error_message: null,
+            chunk_count: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+          chunks: [
+            {
+              id: 10,
+              chunk_index: 0,
+              text: "This paper proposes a retrieval augmented research workflow.",
+              page_start: 1,
+              page_end: 1,
+              section_title: null,
+            },
+          ],
+        }),
+      });
+    });
     await page.route("**/papers/1/ask", async (route) => {
       await route.fulfill({
         status: 200,
