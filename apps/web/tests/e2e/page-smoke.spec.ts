@@ -57,6 +57,57 @@ test.describe("/papers", () => {
   });
 });
 
+test.describe("/papers/[id] detail UX", () => {
+  test("后端可用时显示单论文问题模板、Idea fallback 参数和片段定位", async ({ page }) => {
+    await page.route("**/papers/1/ask", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          answer: "The paper proposes a retrieval augmented workflow.",
+          status: "answered",
+          confidence: 0.7,
+          evidence_gate_reason: "",
+          retrieved_source_count: 1,
+          top_source_score: 0.7,
+          sources: [
+            {
+              paper_id: 1,
+              chunk_id: 10,
+              chunk_index: 0,
+              page_start: 1,
+              page_end: 1,
+              text_excerpt: "retrieval augmented research workflow",
+              score: 0.7,
+              vector_score: 0.2,
+              lexical_score: 0.8,
+              retrieval_mode: "hybrid",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("/papers/1");
+    const main = getAppMain(page);
+    await expect(main.locator("h1").first()).toBeVisible();
+    const text = await main.innerText();
+    if (text.includes("无法加载论文信息")) {
+      test.skip(true, "纯前端 E2E 环境没有后端数据，跳过详情增强控件检查");
+    }
+
+    await expect(main).toContainText("常用问题模板");
+    await expect(main.locator('button:has-text("核心贡献")')).toBeVisible();
+    await expect(main).toContainText("启用 LLM fallback");
+    await expect(main).toContainText("论文片段");
+
+    await main.locator('button:has-text("核心贡献")').click();
+    await main.locator('button:has-text("提问")').click();
+    await expect(main.locator('a:has-text("定位片段")')).toBeVisible();
+    await expect(main).toContainText("关键词: 80.0%");
+  });
+});
+
 test.describe("/papers/ask", () => {
   test("h1 包含'跨论文问答'", async ({ page }) => {
     await page.goto("/papers/ask");
@@ -68,6 +119,31 @@ test.describe("/papers/ask", () => {
     await page.goto("/papers/ask");
     const btn = getAppMain(page).locator('button:has-text("提问")');
     await expect(btn).toBeVisible();
+  });
+
+  test("显示跨论文问题模板和全选入口", async ({ page }) => {
+    await page.route("**/papers", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          papers: [
+            { id: 1, title: "Paper Alpha", filename: "a.pdf", status: "completed", chunk_count: 2, created_at: "2026-01-01T00:00:00Z" },
+            { id: 2, title: "Paper Beta", filename: "b.pdf", status: "completed", chunk_count: 3, created_at: "2026-01-02T00:00:00Z" },
+          ],
+          total: 2,
+        }),
+      });
+    });
+
+    await page.goto("/papers/ask");
+    const main = getAppMain(page);
+    await expect(main).toContainText("常用跨论文问题");
+    await expect(main.locator('button:has-text("共同主题")')).toBeVisible();
+    await expect(main.locator('button:has-text("全选已完成")')).toBeVisible();
+
+    await main.locator('button:has-text("全选已完成")').click();
+    await expect(main).toContainText("已选择 2 篇论文");
   });
 
   test("loading 态：延迟响应时显示'正在加载论文列表'，不显示空状态", async ({ page }) => {

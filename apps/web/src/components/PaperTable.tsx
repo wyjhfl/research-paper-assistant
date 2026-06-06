@@ -13,8 +13,30 @@ interface PaperTableProps {
 }
 
 export default function PaperTable({ papers }: PaperTableProps) {
+  const completed = papers.filter((paper) => paper.status === "completed").length;
+  const failed = papers.filter((paper) => paper.status === "failed").length;
+  const totalChunks = papers.reduce((sum, paper) => sum + paper.chunk_count, 0);
+
   return (
     <>
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <p className="text-xs text-gray-500">论文总数</p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">{papers.length}</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <p className="text-xs text-gray-500">已完成</p>
+          <p className="mt-1 text-lg font-semibold text-green-700">{completed}</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <p className="text-xs text-gray-500">失败</p>
+          <p className="mt-1 text-lg font-semibold text-red-700">{failed}</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+          <p className="text-xs text-gray-500">文本片段</p>
+          <p className="mt-1 text-lg font-semibold text-blue-700">{totalChunks}</p>
+        </div>
+      </div>
       <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

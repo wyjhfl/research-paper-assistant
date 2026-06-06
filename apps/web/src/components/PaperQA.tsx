@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { askPaper, getErrorMessage, type AskResponse, type SourceItem } from "@/lib/api";
+import {
+  askPaper,
+  getErrorMessage,
+  SINGLE_PAPER_QUESTION_PRESETS,
+  type AskResponse,
+  type SourceItem,
+} from "@/lib/api";
+import Link from "next/link";
 
 const EVIDENCE_GATE_REASON_MAP: Record<string, string> = {
   score_below_threshold: "检索得分低于阈值",
@@ -35,6 +42,7 @@ export default function PaperQA({ paperId }: PaperQAProps) {
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [allowLowConfidence, setAllowLowConfidence] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,13 +62,44 @@ export default function PaperQA({ paperId }: PaperQAProps) {
     }
   }
 
+  async function copyAnswer() {
+    if (!result?.answer) return;
+    try {
+      await navigator.clipboard.writeText(result.answer);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("复制失败，请手动选择回答内容复制");
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow mt-6">
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-700">论文问答</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          建议优先用英文提问；当前本地 embedding 会结合关键词检索，英文关键词匹配更稳定。
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 py-4">
+        <div className="mb-3">
+          <p className="mb-2 text-xs font-medium text-gray-500">常用问题模板</p>
+          <div className="flex flex-wrap gap-2">
+            {SINGLE_PAPER_QUESTION_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => setQuestion(preset.question)}
+                title={preset.hint}
+                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                disabled={loading}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex gap-3">
           <input
             type="text"
@@ -87,6 +126,9 @@ export default function PaperQA({ paperId }: PaperQAProps) {
           />
           <span className="text-sm text-gray-600">允许低置信度回答</span>
         </label>
+        <p className="mt-1 text-xs text-gray-400">
+          如果 strict 模式提示上下文不足，可开启该选项查看带来源的尝试性回答。
+        </p>
       </form>
 
       {error && (
@@ -124,6 +166,15 @@ export default function PaperQA({ paperId }: PaperQAProps) {
                 <span className="text-xs text-gray-500">
                   最高相关度: {(result.top_source_score * 100).toFixed(1)}%
                 </span>
+              )}
+              {result.answer && (
+                <button
+                  type="button"
+                  onClick={copyAnswer}
+                  className="ml-auto rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                >
+                  {copied ? "已复制" : "复制回答"}
+                </button>
               )}
             </div>
 
@@ -188,6 +239,12 @@ export default function PaperQA({ paperId }: PaperQAProps) {
                       <span className="text-xs font-medium text-gray-500">
                         #{idx + 1}
                       </span>
+                      <Link
+                        href={`/papers/${paperId}#chunk-${source.chunk_id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        定位片段
+                      </Link>
                       <span className="text-xs text-gray-400">
                         Chunk #{source.chunk_index}
                       </span>
@@ -200,6 +257,16 @@ export default function PaperQA({ paperId }: PaperQAProps) {
                       <span className="text-xs font-medium text-blue-600">
                         相关度: {(source.score * 100).toFixed(1)}%
                       </span>
+                      {source.lexical_score != null && (
+                        <span className="text-xs text-gray-400">
+                          关键词: {(source.lexical_score * 100).toFixed(1)}%
+                        </span>
+                      )}
+                      {source.vector_score != null && (
+                        <span className="text-xs text-gray-400">
+                          向量: {(source.vector_score * 100).toFixed(1)}%
+                        </span>
+                      )}
                       {source.retrieval_mode && (
                         <span className="text-xs text-gray-400">
                           检索: {RETRIEVAL_MODE_MAP[source.retrieval_mode] ?? source.retrieval_mode}

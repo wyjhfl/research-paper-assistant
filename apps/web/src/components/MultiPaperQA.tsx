@@ -6,6 +6,7 @@ import {
   multiPaperAsk,
   fetchPapers,
   getErrorMessage,
+  MULTI_PAPER_QUESTION_PRESETS,
   type MultiPaperAskResponse,
   type MultiPaperSourceItem,
   type PaperListItem,
@@ -43,6 +44,7 @@ export default function MultiPaperQA() {
   const [papersError, setPapersError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [allowLowConfidence, setAllowLowConfidence] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchPapers()
@@ -64,6 +66,10 @@ export default function MultiPaperQA() {
     setSelectedIds(new Set());
   }
 
+  function selectAllCompleted() {
+    setSelectedIds(new Set(papers.map((p) => p.id)));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!question.trim()) return;
@@ -80,6 +86,17 @@ export default function MultiPaperQA() {
       setError(getErrorMessage(err, "问答请求失败"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function copyAnswer() {
+    if (!result?.answer) return;
+    try {
+      await navigator.clipboard.writeText(result.answer);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("复制失败，请手动选择回答内容复制");
     }
   }
 
@@ -122,15 +139,26 @@ export default function MultiPaperQA() {
               <p className="text-sm font-medium text-gray-600">
                 已选择 {selectedIds.size} 篇论文
               </p>
-              {selectedIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="text-xs text-gray-500 hover:text-red-500 transition-colors"
-                >
-                  清空选择
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {selectedIds.size < papers.length && (
+                  <button
+                    type="button"
+                    onClick={selectAllCompleted}
+                    className="text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    全选已完成
+                  </button>
+                )}
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    清空选择
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {papers.map((p) => (
@@ -163,6 +191,23 @@ export default function MultiPaperQA() {
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-4">
+        <div className="mb-3">
+          <p className="mb-2 text-xs font-medium text-gray-500">常用跨论文问题</p>
+          <div className="flex flex-wrap gap-2">
+            {MULTI_PAPER_QUESTION_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => setQuestion(preset.question)}
+                title={preset.hint}
+                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                disabled={loading}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -189,6 +234,9 @@ export default function MultiPaperQA() {
           />
           <span className="text-sm text-gray-600">允许低置信度回答</span>
         </label>
+        <p className="mt-1 text-xs text-gray-400">
+          不选择论文时默认全库检索；如中文问题命中率低，建议改用英文关键词。
+        </p>
       </form>
 
       {loading && (
@@ -247,6 +295,15 @@ export default function MultiPaperQA() {
                 <span className="text-sm text-gray-500">
                   最高相关度: {(result.top_source_score * 100).toFixed(1)}%
                 </span>
+              )}
+              {result.answer && (
+                <button
+                  type="button"
+                  onClick={copyAnswer}
+                  className="ml-auto rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                >
+                  {copied ? "已复制" : "复制回答"}
+                </button>
               )}
             </div>
 
@@ -314,6 +371,12 @@ export default function MultiPaperQA() {
                       <span className="text-sm font-bold text-blue-600">
                         {source.paper_title}
                       </span>
+                      <Link
+                        href={`/papers/${source.paper_id}#chunk-${source.chunk_id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        定位片段
+                      </Link>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs text-gray-500">
                       <span>第 {source.page_start} 至 {source.page_end} 页</span>
@@ -321,6 +384,12 @@ export default function MultiPaperQA() {
                       <span className="font-medium text-blue-600">
                         相关度: {(source.score * 100).toFixed(1)}%
                       </span>
+                      {source.lexical_score != null && (
+                        <span>关键词: {(source.lexical_score * 100).toFixed(1)}%</span>
+                      )}
+                      {source.vector_score != null && (
+                        <span>向量: {(source.vector_score * 100).toFixed(1)}%</span>
+                      )}
                       {source.retrieval_mode && (
                         <span>
                           检索: {RETRIEVAL_MODE_MAP[source.retrieval_mode] ?? source.retrieval_mode}

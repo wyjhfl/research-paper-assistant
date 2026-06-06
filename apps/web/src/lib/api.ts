@@ -115,6 +115,35 @@ export interface AskResponse {
   expanded_query_terms?: string[];
 }
 
+export type QuestionPreset = {
+  label: string;
+  question: string;
+  hint: string;
+};
+
+export const SINGLE_PAPER_QUESTION_PRESETS: QuestionPreset[] = [
+  {
+    label: "核心贡献",
+    question: "What are the main contributions of this paper?",
+    hint: "适合快速了解论文创新点",
+  },
+  {
+    label: "方法流程",
+    question: "What method does this paper propose and how does it work?",
+    hint: "适合梳理论文方法",
+  },
+  {
+    label: "实验结论",
+    question: "What experiments or evidence support the claims?",
+    hint: "适合检查论据是否充分",
+  },
+  {
+    label: "局限与未来工作",
+    question: "What limitations and future research directions are discussed?",
+    hint: "适合发现可延展的研究方向",
+  },
+];
+
 export interface EmbeddingRebuildResponse {
   paper_id: number;
   chunks_embedded: number;
@@ -282,11 +311,15 @@ export interface IdeaCandidateItem {
   tags: string[];
   source_chunk_ids: number[];
   confidence: number;
+  extraction_method?: string;
 }
 
 export interface ExtractIdeasResponse {
   paper_id: number;
   candidates: IdeaCandidateItem[];
+  reason?: string;
+  suggestions?: string[];
+  extraction_method?: string;
 }
 
 export interface IdeaSourceItem {
@@ -355,8 +388,15 @@ export interface IdeaDetailResponse {
   sources: IdeaSourceItem[];
 }
 
-export async function extractIdeas(paperId: number): Promise<ExtractIdeasResponse> {
-  return apiFetch<ExtractIdeasResponse>(`/papers/${paperId}/ideas/extract`, {
+export async function extractIdeas(
+  paperId: number,
+  useLlmFallback: boolean = true,
+  maxIdeas: number = 3,
+): Promise<ExtractIdeasResponse> {
+  const params = new URLSearchParams();
+  params.set("use_llm_fallback", String(useLlmFallback));
+  params.set("max_ideas", String(maxIdeas));
+  return apiFetch<ExtractIdeasResponse>(`/papers/${paperId}/ideas/extract?${params.toString()}`, {
     method: "POST",
   });
 }
@@ -464,6 +504,29 @@ export interface MultiPaperAskResponse {
   query_expansion_applied?: boolean;
   expanded_query_terms?: string[];
 }
+
+export const MULTI_PAPER_QUESTION_PRESETS: QuestionPreset[] = [
+  {
+    label: "共同主题",
+    question: "What common themes and differences appear across these papers?",
+    hint: "适合横向比较多篇论文",
+  },
+  {
+    label: "方法对比",
+    question: "How do the methods in these papers differ, and when should each be used?",
+    hint: "适合选择方法路线",
+  },
+  {
+    label: "研究空白",
+    question: "What research gaps or open problems can be inferred from these papers?",
+    hint: "适合找选题",
+  },
+  {
+    label: "引用建议",
+    question: "Which papers provide the strongest evidence for a related work section?",
+    hint: "适合写 related work",
+  },
+];
 
 export interface PaperSearchResponse {
   results: MultiPaperSourceItem[];
