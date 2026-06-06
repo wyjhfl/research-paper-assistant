@@ -44,7 +44,7 @@ async def tool_search_papers(query: str, limit: int = 5, user_id: str = "default
         results = []
         for p in papers:
             if query.lower() in p.title.lower() or query.lower() in p.filename.lower():
-                chunk_count = await repo.get_chunk_count(p.id)
+                chunk_count = await repo.get_chunk_count(p.id, user_id=user_id)
                 results.append({
                     "paper_id": p.id,
                     "title": p.title,
@@ -322,7 +322,7 @@ async def tool_save_research_idea(
         paper = await paper_repo.get_paper(paper_id, user_id=user_id)
         if paper is None:
             return {"error": f"validation_error: paper {paper_id} not found"}
-        chunks = await paper_repo.get_chunks_by_paper(paper_id)
+        chunks = await paper_repo.get_chunks_by_paper(paper_id, user_id=user_id)
         if not chunks:
             return {"error": f"validation_error: paper {paper_id} has no chunks, cannot create source-backed idea"}
 

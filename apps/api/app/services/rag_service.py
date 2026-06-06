@@ -82,7 +82,7 @@ class RAGService:
         if paper.status != "completed":
             raise PaperNotReadyError(paper_id, paper.status)
 
-        chunks_count = await self.repo.get_chunk_count(paper_id)
+        chunks_count = await self.repo.get_chunk_count(paper_id, user_id=self.user_id)
         if chunks_count == 0:
             return AnswerResult(
                 answer="该论文暂无文本片段，无法回答问题。",
@@ -94,7 +94,7 @@ class RAGService:
                 top_source_score=0.0,
             )
 
-        embedding_count = await self.repo.get_embedding_count(paper_id)
+        embedding_count = await self.repo.get_embedding_count(paper_id, user_id=self.user_id)
         if embedding_count == 0:
             return AnswerResult(
                 answer="该论文的文本片段尚未生成向量索引，无法进行问答。请先重建 embedding。",

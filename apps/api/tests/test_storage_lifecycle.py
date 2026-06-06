@@ -12,6 +12,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
+from tests.conftest import skip_if_no_db
 
 
 def _make_mock_session(mock_session_cls, execute_return):
@@ -572,6 +573,31 @@ def test_ops_check_no_cleanup_confirm():
     content = ops_check.read_text()
     assert "cleanup_storage.py --confirm" not in content
     assert "--confirm" not in content
+
+
+@pytest.mark.asyncio
+@skip_if_no_db()
+async def test_paper_repository_chunk_helpers_filter_user_id():
+    from app.models import Paper, PaperChunk
+    from app.repositories.paper_repo import PaperRepository
+    from tests.conftest import _test_session_factory
+
+    async with _test_session_factory() as session:
+        own = Paper(title="own", filename="own.pdf", file_path="own.pdf", status="completed", user_id="user_a")
+        other = Paper(title="other", filename="other.pdf", file_path="other.pdf", status="completed", user_id="user_b")
+        session.add_all([own, other])
+        await session.flush()
+        session.add(PaperChunk(paper_id=own.id, chunk_index=0, text="own", embedding=[0.1] * 384))
+        session.add(PaperChunk(paper_id=other.id, chunk_index=0, text="other", embedding=[0.2] * 384))
+        await session.commit()
+
+        repo = PaperRepository(session)
+        assert await repo.get_chunk_count(own.id, user_id="user_a") == 1
+        assert await repo.get_chunk_count(own.id, user_id="user_b") == 0
+        assert await repo.get_embedding_count(other.id, user_id="user_a") == 0
+        assert await repo.get_chunks_by_paper(other.id, user_id="user_a") == []
+        assert await repo.clear_embeddings(other.id, user_id="user_a") == 0
+        assert await repo.get_embedding_count(other.id, user_id="user_b") == 1
 
 
 def test_ops_check_storage_audit_parses_json_counts():

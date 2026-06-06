@@ -4,7 +4,7 @@ export default function Loading() {
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900">多 Agent 科研论文助手</h1>
         <p className="mt-4 text-lg text-gray-500">
-          上传科研 PDF · 解析论文 · RAG 问答 · Idea 抽取 · 引用推荐
+          上传科研 PDF / 解析论文 / RAG 问答 / Idea 抽取 / 引用推荐
         </p>
       </div>
 

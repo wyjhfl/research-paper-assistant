@@ -1,5 +1,5 @@
-import { fetchPaper } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-user";
+import { fetchPaperServer } from "@/lib/api";
+import { getServerSessionCookieHeader, getServerUserId } from "@/lib/server-user";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import StatusBadge from "@/components/StatusBadge";
@@ -27,7 +27,11 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
   let error = false;
 
   try {
-    const res = await fetchPaper(parseInt(id, 10), await getServerUserId());
+    const res = await fetchPaperServer(
+      parseInt(id, 10),
+      await getServerUserId(),
+      await getServerSessionCookieHeader(),
+    );
     paper = res.paper;
     chunks = res.chunks;
   } catch {
@@ -95,7 +99,7 @@ export default async function PaperDetailPage({ params }: PaperDetailPageProps) 
               <div key={chunk.id} className="px-5 py-3">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="text-xs font-medium text-gray-500">Chunk #{chunk.chunk_index}</span>
-                  <span className="text-xs text-gray-400">第 {chunk.page_start}–{chunk.page_end} 页</span>
+                  <span className="text-xs text-gray-400">第 {chunk.page_start}-{chunk.page_end} 页</span>
                   {chunk.section_title && (
                     <span className="text-xs text-blue-600">{chunk.section_title}</span>
                   )}

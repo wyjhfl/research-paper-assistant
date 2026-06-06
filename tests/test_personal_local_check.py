@@ -9,6 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = PROJECT_ROOT / "scripts" / "personal_local_check.py"
+PS_SCRIPT = PROJECT_ROOT / "scripts" / "personal_local_check.ps1"
 
 
 def load_module():
@@ -23,6 +24,7 @@ def load_module():
 class TestPersonalLocalCheckStaticSafety:
     def test_script_exists(self):
         assert SCRIPT.exists()
+        assert PS_SCRIPT.exists()
 
     def test_no_dangerous_operations(self):
         content = SCRIPT.read_text(encoding="utf-8")
@@ -54,6 +56,14 @@ class TestPersonalLocalCheckStaticSafety:
         assert "EMBEDDING_API_KEY" not in content
         assert ".env" in content  # only path tracking check
 
+    def test_powershell_wrapper_resolves_python_structured(self):
+        content = PS_SCRIPT.read_text(encoding="utf-8")
+        assert "Resolve-PythonCommand" in content
+        assert "Test-PythonCandidate" in content
+        assert "@($python.Args + $scriptArgs)" in content
+        assert "& \"py -3\"" not in content
+        assert "eval_real_model.py" not in content
+
 
 class TestPersonalLocalCheckRuntime:
     def test_main_success_with_mocked_checks(self, monkeypatch, capsys):
@@ -84,6 +94,7 @@ class TestPersonalLocalCheckRuntime:
 
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", lambda api_base, path, timeout=10: (True, '{"status": "ok", "ready": true}'))
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -114,6 +125,7 @@ class TestPersonalLocalCheckRuntime:
 
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", lambda api_base, path, timeout=10: (True, '{"status": "ok", "ready": true}'))
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 1
@@ -121,7 +133,7 @@ class TestPersonalLocalCheckRuntime:
         assert out["ok"] is False
         assert any(c["name"] == "git sensitive paths not tracked" and not c["ok"] for c in out["checks"])
 
-    def test_skip_model_smoke_avoids_model_command(self, monkeypatch, capsys):
+    def test_default_skips_model_smoke(self, monkeypatch, capsys):
         module = load_module()
         commands: list[str] = []
 
@@ -145,9 +157,40 @@ class TestPersonalLocalCheckRuntime:
 
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", lambda api_base, path, timeout=10: (True, '{"status": "ok", "ready": true}'))
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
-        assert module.main(["--skip-model-smoke"]) == 0
+        assert module.main([]) == 0
         assert not any("model_smoke_check.py" in cmd for cmd in commands)
         out = json.loads(capsys.readouterr().out)
         assert any(c["name"] == "backend model_smoke_check.py" and "skipped" in c["message"] for c in out["checks"])
+
+    def test_run_model_smoke_executes_model_command(self, monkeypatch, capsys):
+        module = load_module()
+        commands: list[str] = []
+
+        def fake_run(args, timeout=60):
+            cmd = " ".join(args)
+            commands.append(cmd)
+            if "ls-files" in cmd or "status --short" in cmd:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if "docker --version" in cmd:
+                return subprocess.CompletedProcess(args, 0, "Docker version test", "")
+            if "docker compose ps" in cmd:
+                service_rows = "\n".join([
+                    '{"Service":"backend","State":"running","Health":"healthy"}',
+                    '{"Service":"frontend","State":"running","Health":""}',
+                    '{"Service":"postgres","State":"running","Health":"healthy"}',
+                ])
+                return subprocess.CompletedProcess(args, 0, service_rows, "")
+            if "smoke_check.py" in cmd or "model_smoke_check.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, "RESULT: ALL CHECKS PASSED", "")
+            return subprocess.CompletedProcess(args, 0, "PASSED", "")
+
+        monkeypatch.setattr(module, "_run", fake_run)
+        monkeypatch.setattr(module, "_http_json", lambda api_base, path, timeout=10: (True, '{"status": "ok", "ready": true}'))
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "resolve_git", lambda: "git")
+
+        assert module.main(["--run-model-smoke"]) == 0
+        assert any("model_smoke_check.py" in cmd for cmd in commands)

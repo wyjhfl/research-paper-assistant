@@ -46,7 +46,7 @@ async def list_papers(
                 "title": p.title,
                 "filename": p.filename,
                 "status": p.status,
-                "chunk_count": await PaperRepository(db).get_chunk_count(p.id),
+                "chunk_count": await PaperRepository(db).get_chunk_count(p.id, user_id=user_id),
                 "created_at": p.created_at,
             }
             for p in papers
@@ -88,7 +88,7 @@ async def upload_paper(
         "title": paper.title,
         "filename": paper.filename,
         "status": paper.status,
-        "chunk_count": await PaperRepository(db).get_chunk_count(paper.id),
+        "chunk_count": await PaperRepository(db).get_chunk_count(paper.id, user_id=user_id),
         "job_id": job_id,
     }
 
@@ -105,7 +105,7 @@ async def get_paper(
         raise HTTPException(status_code=404, detail="Paper not found")
 
     repo = PaperRepository(db)
-    chunks = await repo.get_chunks_by_paper(paper_id)
+    chunks = await repo.get_chunks_by_paper(paper_id, user_id=user_id)
     return {
         "paper": {
             "id": paper.id,

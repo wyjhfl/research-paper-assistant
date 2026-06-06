@@ -29,12 +29,12 @@ Expected services:
 python scripts/personal_local_check.py
 ```
 
-This script is read-only. It checks Git safety, Docker service status, `/health`, `/health/ready`, backend smoke, model smoke, docs secret scan, and frontend mojibake scan.
+This script is read-only. It checks Git safety, Docker service status, `/health`, `/health/ready`, frontend HTTP, backend smoke, docs secret scan, and frontend mojibake scan. It skips model smoke by default.
 
-If you want to avoid a real LLM connectivity call, use:
+If you want to explicitly run a real LLM connectivity check, use:
 
 ```bash
-python scripts/personal_local_check.py --skip-model-smoke
+python scripts/personal_local_check.py --run-model-smoke
 ```
 
 ## Demo data

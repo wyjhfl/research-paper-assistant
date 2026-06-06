@@ -161,16 +161,26 @@ def check_docker() -> list[Check]:
     return checks
 
 
-def check_http(api_base: str) -> list[Check]:
+def _http_status(url: str, timeout: int = 10) -> tuple[bool, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return 200 <= resp.status < 400, f"status={resp.status}"
+    except (urllib.error.URLError, TimeoutError) as exc:
+        return False, type(exc).__name__
+
+
+def check_http(api_base: str, frontend_base: str) -> list[Check]:
     checks: list[Check] = []
     ok, msg = _http_json(api_base, "/health")
     checks.append(Check("GET /health", ok and '"status": "ok"' in msg, msg))
     ok, msg = _http_json(api_base, "/health/ready")
     checks.append(Check("GET /health/ready", ok and '"ready": true' in msg, msg))
+    ok, msg = _http_status(frontend_base)
+    checks.append(Check("GET frontend", ok, msg))
     return checks
 
 
-def check_scripts(skip_model_smoke: bool = False) -> list[Check]:
+def check_scripts(run_model_smoke: bool = False) -> list[Check]:
     checks: list[Check] = []
     smoke = _run(["docker", "compose", "exec", "-T", "backend", "python", "scripts/smoke_check.py"], timeout=120)
     checks.append(
@@ -180,12 +190,12 @@ def check_scripts(skip_model_smoke: bool = False) -> list[Check]:
             "passed" if smoke.returncode == 0 else "failed",
         )
     )
-    if skip_model_smoke:
-        checks.append(Check("backend model_smoke_check.py", True, "skipped by --skip-model-smoke"))
-    else:
+    if run_model_smoke:
         model = _run(["docker", "compose", "exec", "-T", "backend", "python", "scripts/model_smoke_check.py"], timeout=180)
         model_ok = model.returncode == 0 and "RESULT: ALL CHECKS PASSED" in model.stdout
         checks.append(Check("backend model_smoke_check.py", model_ok, "passed" if model_ok else "failed"))
+    else:
+        checks.append(Check("backend model_smoke_check.py", True, "skipped by default; pass --run-model-smoke to test real model connectivity"))
     return checks
 
 
@@ -201,10 +211,16 @@ def check_scanners() -> list[Check]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read-only personal local Docker health check.")
     parser.add_argument("--api-base", default=API_BASE, help="Backend API base URL, default http://localhost:8091")
+    parser.add_argument("--frontend-base", default="http://localhost:3000", help="Frontend URL, default http://localhost:3000")
     parser.add_argument(
         "--skip-model-smoke",
         action="store_true",
-        help="Skip model_smoke_check.py. Use this to avoid real LLM calls.",
+        help="Deprecated no-op: model_smoke_check.py is skipped by default.",
+    )
+    parser.add_argument(
+        "--run-model-smoke",
+        action="store_true",
+        help="Run model_smoke_check.py. This may call the configured real LLM provider.",
     )
     return parser.parse_args(argv)
 
@@ -217,8 +233,8 @@ def main(argv: list[str] | None = None) -> int:
     if any(c.name == "docker available" and not c.ok for c in checks):
         print(json.dumps({"ok": False, "checks": [asdict(c) for c in checks]}, ensure_ascii=False, indent=2))
         return 1
-    checks.extend(check_http(args.api_base.rstrip("/")))
-    checks.extend(check_scripts(skip_model_smoke=args.skip_model_smoke))
+    checks.extend(check_http(args.api_base.rstrip("/"), args.frontend_base.rstrip("/")))
+    checks.extend(check_scripts(run_model_smoke=args.run_model_smoke))
     checks.extend(check_scanners())
 
     ok = all(c.ok for c in checks)

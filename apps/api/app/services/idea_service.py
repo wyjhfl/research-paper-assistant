@@ -87,7 +87,7 @@ class IdeaService:
         if paper.status != "completed":
             raise ValueError(f"Paper {paper_id} is not ready (status={paper.status})")
 
-        chunks = await self.paper_repo.get_chunks_by_paper(paper_id)
+        chunks = await self.paper_repo.get_chunks_by_paper(paper_id, user_id=user_id)
         if not chunks:
             return ExtractIdeasResult(
                 candidates=[],
@@ -306,7 +306,7 @@ class IdeaService:
         if paper is None:
             raise ValueError(f"Paper {paper_id} not found for user {user_id}")
 
-        chunks = await self.paper_repo.get_chunks_by_paper(paper_id)
+        chunks = await self.paper_repo.get_chunks_by_paper(paper_id, user_id=user_id)
         chunk_ids = {c.id for c in chunks}
         for cid in source_chunk_ids:
             if cid not in chunk_ids:

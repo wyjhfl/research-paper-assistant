@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, func, text, bindparam
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Paper, PaperChunk
@@ -44,40 +44,49 @@ class PaperRepository:
         await self.session.refresh(paper)
         return paper
 
-    async def get_chunks_by_paper(self, paper_id: int) -> list[PaperChunk]:
+    def _paper_chunk_stmt(self, paper_id: int, user_id: str | None = None):
+        stmt = select(PaperChunk).where(PaperChunk.paper_id == paper_id)
+        if user_id is not None:
+            stmt = stmt.join(Paper, Paper.id == PaperChunk.paper_id).where(Paper.user_id == user_id)
+        return stmt
+
+    def _paper_chunk_count_stmt(self, paper_id: int, user_id: str | None = None):
+        stmt = select(func.count(PaperChunk.id)).where(PaperChunk.paper_id == paper_id)
+        if user_id is not None:
+            stmt = stmt.join(Paper, Paper.id == PaperChunk.paper_id).where(Paper.user_id == user_id)
+        return stmt
+
+    async def get_chunks_by_paper(self, paper_id: int, user_id: str | None = None) -> list[PaperChunk]:
         result = await self.session.execute(
-            select(PaperChunk)
-            .where(PaperChunk.paper_id == paper_id)
+            self._paper_chunk_stmt(paper_id, user_id=user_id)
             .order_by(PaperChunk.chunk_index)
         )
         return list(result.scalars().all())
 
-    async def get_chunks_without_embedding(self, paper_id: int) -> list[PaperChunk]:
+    async def get_chunks_without_embedding(self, paper_id: int, user_id: str | None = None) -> list[PaperChunk]:
         result = await self.session.execute(
-            select(PaperChunk)
-            .where(PaperChunk.paper_id == paper_id, PaperChunk.embedding.is_(None))
+            self._paper_chunk_stmt(paper_id, user_id=user_id)
+            .where(PaperChunk.embedding.is_(None))
             .order_by(PaperChunk.chunk_index)
         )
         return list(result.scalars().all())
 
-    async def get_chunk_count(self, paper_id: int) -> int:
+    async def get_chunk_count(self, paper_id: int, user_id: str | None = None) -> int:
         result = await self.session.execute(
-            select(func.count(PaperChunk.id)).where(PaperChunk.paper_id == paper_id)
+            self._paper_chunk_count_stmt(paper_id, user_id=user_id)
         )
         return result.scalar() or 0
 
-    async def get_embedding_count(self, paper_id: int) -> int:
+    async def get_embedding_count(self, paper_id: int, user_id: str | None = None) -> int:
         result = await self.session.execute(
-            select(func.count(PaperChunk.id)).where(
-                PaperChunk.paper_id == paper_id,
-                PaperChunk.embedding.isnot(None),
-            )
+            self._paper_chunk_count_stmt(paper_id, user_id=user_id)
+            .where(PaperChunk.embedding.isnot(None))
         )
         return result.scalar() or 0
 
-    async def clear_embeddings(self, paper_id: int) -> int:
+    async def clear_embeddings(self, paper_id: int, user_id: str | None = None) -> int:
         result = await self.session.execute(
-            select(PaperChunk).where(PaperChunk.paper_id == paper_id)
+            self._paper_chunk_stmt(paper_id, user_id=user_id)
         )
         chunks = list(result.scalars().all())
         count = 0

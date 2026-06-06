@@ -10,16 +10,45 @@ MOJIBAKE_CODE_POINTS = [
     0x93C8, 0x951B, 0xFFFD,
 ]
 
+DISCOURAGED_CODE_POINTS = [
+    0x00B7,  # middle dot
+    0x00D7,  # multiplication sign used as close icon
+    0x2013,  # en dash
+    0x2014,  # em dash
+    0x2192,  # arrow
+    0x1F4A1, 0x1F4AC, 0x1F4C4, 0x1F4CA, 0x1F4DA, 0x1F50D, 0x1F527, 0x1F916,
+]
+
+MOJIBAKE_SUBSTRINGS = [
+    'icon="??"',
+    'icon: "??"',
+    ">??<",
+    "馃",
+    "鈫",
+    "鉁",
+    "锛",
+    "銆",
+    "Ў",
+]
+
 SCAN_FILES = [
+    "apps/web/src/app/page.tsx",
+    "apps/web/src/app/loading.tsx",
+    "apps/web/src/app/not-found.tsx",
+    "apps/web/src/app/ideas/page.tsx",
+    "apps/web/src/app/ideas/[id]/page.tsx",
+    "apps/web/src/app/papers/page.tsx",
+    "apps/web/src/app/papers/[id]/page.tsx",
+    "apps/web/src/app/mcp/page.tsx",
     "apps/web/src/lib/api.ts",
     "apps/web/src/app/login/page.tsx",
     "apps/web/src/app/register/page.tsx",
     "apps/web/src/app/jobs/page.tsx",
+    "apps/web/src/components/EmptyState.tsx",
     "apps/web/src/components/UserSwitcher.tsx",
     "apps/web/src/components/UsageDashboard.tsx",
     "apps/web/tests/e2e/auth.spec.ts",
     "apps/web/tests/e2e/jobs.spec.ts",
-    "apps/web/tests/e2e/no-mojibake.spec.ts",
 ]
 
 
@@ -51,6 +80,15 @@ def main() -> int:
             ch = chr(cp)
             if ch in content:
                 print(f"MOJIBAKE: {rel_path} contains U+{cp:04X}")
+                errors += 1
+        for cp in DISCOURAGED_CODE_POINTS:
+            ch = chr(cp)
+            if ch in content:
+                print(f"DISCOURAGED UNICODE: {rel_path} contains U+{cp:04X}")
+                errors += 1
+        for marker in MOJIBAKE_SUBSTRINGS:
+            if marker in content:
+                print(f"MOJIBAKE TEXT: {rel_path} contains {ascii(marker)}")
                 errors += 1
 
     if errors == 0:

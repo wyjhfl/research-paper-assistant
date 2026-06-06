@@ -1,5 +1,5 @@
-import { fetchIdeas, type IdeaListItem } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-user";
+import { fetchIdeasServer, type IdeaListItem } from "@/lib/api";
+import { getServerSessionCookieHeader, getServerUserId } from "@/lib/server-user";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
@@ -11,7 +11,10 @@ export default async function IdeasPage() {
   let ideas: IdeaListItem[] = [];
   let fetchError = false;
   try {
-    const res = await fetchIdeas(await getServerUserId());
+    const res = await fetchIdeasServer(
+      await getServerUserId(),
+      await getServerSessionCookieHeader(),
+    );
     ideas = res.ideas;
   } catch {
     fetchError = true;
@@ -36,7 +39,7 @@ export default async function IdeasPage() {
 
       {!fetchError && ideas.length === 0 && (
         <EmptyState
-          icon="💡"
+          icon="想法"
           title="暂无 Idea"
           description="在论文详情页点击「抽取 Idea」从论文中提取研究想法，或运行 Agent extract_ideas 任务"
           actions={[

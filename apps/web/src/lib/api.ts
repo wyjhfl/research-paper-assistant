@@ -207,6 +207,19 @@ async function apiFetch<T>(path: string, options?: RequestInit, userIdOverride?:
   return res.json();
 }
 
+export async function apiFetchWithSession<T>(
+  path: string,
+  sessionCookieHeader?: string,
+  options?: RequestInit,
+  userIdOverride?: string,
+): Promise<T> {
+  const headers = new Headers(options?.headers);
+  if (sessionCookieHeader) {
+    headers.set("Cookie", sessionCookieHeader);
+  }
+  return apiFetch<T>(path, { ...options, headers }, userIdOverride);
+}
+
 export async function fetchHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>("/health");
 }
@@ -215,8 +228,23 @@ export async function fetchPapers(userIdOverride?: string): Promise<PaperListRes
   return apiFetch<PaperListResponse>("/papers", undefined, userIdOverride);
 }
 
+export async function fetchPapersServer(
+  userIdOverride?: string,
+  sessionCookieHeader?: string,
+): Promise<PaperListResponse> {
+  return apiFetchWithSession<PaperListResponse>("/papers", sessionCookieHeader, undefined, userIdOverride);
+}
+
 export async function fetchPaper(paperId: number, userIdOverride?: string): Promise<PaperDetailResponse> {
   return apiFetch<PaperDetailResponse>(`/papers/${paperId}`, undefined, userIdOverride);
+}
+
+export async function fetchPaperServer(
+  paperId: number,
+  userIdOverride?: string,
+  sessionCookieHeader?: string,
+): Promise<PaperDetailResponse> {
+  return apiFetchWithSession<PaperDetailResponse>(`/papers/${paperId}`, sessionCookieHeader, undefined, userIdOverride);
 }
 
 export async function uploadPaper(file: File, asyncMode: boolean = true): Promise<PaperUploadResponse> {
@@ -345,8 +373,23 @@ export async function fetchIdeas(userIdOverride?: string): Promise<IdeaListRespo
   return apiFetch<IdeaListResponse>("/ideas", undefined, userIdOverride);
 }
 
+export async function fetchIdeasServer(
+  userIdOverride?: string,
+  sessionCookieHeader?: string,
+): Promise<IdeaListResponse> {
+  return apiFetchWithSession<IdeaListResponse>("/ideas", sessionCookieHeader, undefined, userIdOverride);
+}
+
 export async function fetchIdea(ideaId: number, userIdOverride?: string): Promise<IdeaDetailResponse> {
   return apiFetch<IdeaDetailResponse>(`/ideas/${ideaId}`, undefined, userIdOverride);
+}
+
+export async function fetchIdeaServer(
+  ideaId: number,
+  userIdOverride?: string,
+  sessionCookieHeader?: string,
+): Promise<IdeaDetailResponse> {
+  return apiFetchWithSession<IdeaDetailResponse>(`/ideas/${ideaId}`, sessionCookieHeader, undefined, userIdOverride);
 }
 
 export async function deleteIdea(ideaId: number): Promise<void> {

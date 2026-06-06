@@ -66,12 +66,12 @@ docker compose up --build
 python scripts/personal_local_check.py
 ```
 
-该脚本只做状态检查，不读取或输出 `.env` 内容，不执行 `eval_real_model.py`，不执行 backup/restore/cleanup `--confirm`。检查范围包括：Git 安全状态、Docker 服务、`/health`、`/health/ready`、`smoke_check.py`、`model_smoke_check.py`、文档密钥扫描和前端乱码扫描。
+该脚本只做状态检查，不读取或输出 `.env` 内容，不执行 `eval_real_model.py`，不执行 backup/restore/cleanup `--confirm`。检查范围包括：Git 安全状态、Docker 服务、`/health`、`/health/ready`、前端 HTTP、`smoke_check.py`、文档密钥扫描和前端乱码扫描；仅在显式传入 `--run-model-smoke` 时执行 `model_smoke_check.py`。
 
-如果只想做基础检查、避免真实 LLM 连通性调用，可执行：
+默认会跳过真实 LLM 连通性调用。如果需要验证真实模型连通性，可执行：
 
 ```bash
-python scripts/personal_local_check.py --skip-model-smoke
+python scripts/personal_local_check.py --run-model-smoke
 ```
 
 更多个人本地启动、RAG smoke 和排障步骤见 [LOCAL_DOCKER_RUNBOOK.md](docs/LOCAL_DOCKER_RUNBOOK.md)。
@@ -694,15 +694,16 @@ powershell -ExecutionPolicy Bypass -File scripts/verify_all.ps1 -RunRealModelEva
 
 ### E2E 依赖
 
-- Frontend 必须可访问 `http://localhost:3000`
+- Playwright 默认启动独立 Next dev server：`http://localhost:3001`
+- Docker 前端默认地址：`http://localhost:3000`（通过 `E2E_BASE_URL` 指定时使用）
 - Backend 必须可访问 `http://localhost:8091`
 - Demo 数据已写入：`docker compose exec backend python scripts/seed_demo.py`
 
 ### E2E Dev Server 复用策略
 
-Playwright 默认**不复用**已有的 Next dev server，每次运行会启动独立的 dev server 实例。这确保 E2E 测试始终运行当前源码，避免旧 `.next` 缓存导致 cookie/user isolation 测试假失败或假通过。
+Playwright 默认**不复用**已有的 Next dev server，每次运行会启动独立的 dev server 实例（端口 `3001`）。这确保 E2E 测试始终运行当前源码，避免旧 `.next` 缓存导致 cookie/user isolation 测试假失败或假通过。
 
-- **默认行为**（`npm run test:e2e`）：Playwright 启动新的 `npm run dev`，不复用旧进程。如果端口 3000 已被占用，测试会启动失败——需先停止旧 dev server。
+- **默认行为**（`npm run test:e2e`）：Playwright 启动 `npx next dev -p 3001`，不复用旧进程。如果端口 3001 已被占用，测试会启动失败——需先停止旧 dev server。
 - **显式复用**：如需复用已有 dev server（如 Docker 中的前端），设置环境变量后运行 `test:e2e:reuse`：
   ```powershell
   # PowerShell

@@ -111,7 +111,7 @@ class PaperService:
         if paper is None:
             raise ValueError(f"Paper {paper_id} not found for user {self.user_id}")
 
-        await self.repo.clear_embeddings(paper_id)
+        await self.repo.clear_embeddings(paper_id, user_id=self.user_id)
         await self.session.commit()
 
         count = await self.embedding_service.embed_chunks_for_paper(paper_id)

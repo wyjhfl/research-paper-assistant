@@ -22,7 +22,7 @@ class EmbeddingService:
         self.provider = get_embedding_provider()
 
     async def embed_chunks_for_paper(self, paper_id: int) -> int:
-        chunks = await self.repo.get_chunks_without_embedding(paper_id)
+        chunks = await self.repo.get_chunks_without_embedding(paper_id, user_id=self.user_id)
         if not chunks:
             logger.info("No chunks without embedding for paper_id=%d", paper_id)
             return 0

@@ -111,7 +111,7 @@ export default function UserSwitcher() {
           onClick={() => setEditing(false)}
           className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-700"
         >
-          ×
+          关闭
         </button>
       </div>
     );

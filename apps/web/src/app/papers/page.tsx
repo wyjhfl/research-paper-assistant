@@ -1,5 +1,5 @@
-import { fetchPapers, type PaperListItem } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-user";
+import { fetchPapersServer, type PaperListItem } from "@/lib/api";
+import { getServerSessionCookieHeader, getServerUserId } from "@/lib/server-user";
 import PaperTable from "@/components/PaperTable";
 import UploadForm from "@/components/UploadForm";
 import PageHeader from "@/components/PageHeader";
@@ -16,7 +16,10 @@ export default async function PapersPage({ searchParams }: PapersPageProps) {
   let papers: PaperListItem[] = [];
   let fetchError = false;
   try {
-    const res = await fetchPapers(await getServerUserId());
+    const res = await fetchPapersServer(
+      await getServerUserId(),
+      await getServerSessionCookieHeader(),
+    );
     papers = res.papers;
   } catch {
     fetchError = true;
@@ -43,7 +46,7 @@ export default async function PapersPage({ searchParams }: PapersPageProps) {
 
       {!fetchError && papers.length === 0 && (
         <EmptyState
-          icon="📚"
+          icon="论文"
           title="暂无论文"
           description="上传 PDF 论文或运行 seed_demo.py 导入示例数据"
           actions={[

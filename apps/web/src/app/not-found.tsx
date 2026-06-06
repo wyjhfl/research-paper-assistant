@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
-      <div className="text-6xl mb-4">🔍</div>
+      <div className="text-6xl mb-4">404</div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">页面未找到</h1>
       <p className="text-sm text-gray-500 mb-6">请求的页面不存在或已被移除</p>
       <div className="flex flex-wrap justify-center gap-3">

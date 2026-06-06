@@ -3,43 +3,43 @@ import PageHeader from "@/components/PageHeader";
 
 const CAPABILITIES = [
   {
-    icon: "📚",
+    icon: "论文",
     title: "PDF 上传与论文库",
     description: "上传科研 PDF，自动解析、分块、构建向量索引",
     href: "/papers",
   },
   {
-    icon: "💬",
+    icon: "问答",
     title: "单论文问答",
     description: "基于论文内容的 RAG 问答，附引用来源与置信度",
     href: "/papers",
   },
   {
-    icon: "🔍",
+    icon: "检索",
     title: "跨论文问答",
     description: "全库检索或指定论文范围，跨文献回答问题",
     href: "/papers/ask",
   },
   {
-    icon: "💡",
+    icon: "想法",
     title: "Idea 抽取",
     description: "从论文中提取研究想法、研究问题与方法提示",
     href: "/ideas",
   },
   {
-    icon: "🤖",
+    icon: "Agent",
     title: "Agent 工作流",
     description: "LangGraph 编排的多 Agent 协作：总结、Idea、引用推荐",
     href: "/agent",
   },
   {
-    icon: "🔧",
+    icon: "MCP",
     title: "MCP 工具",
     description: "Model Context Protocol 工具集，支持外部集成",
     href: "/mcp",
   },
   {
-    icon: "📊",
+    icon: "评测",
     title: "真实模型评测",
     description: "eval_real_model.py 脚本验证真实 LLM + Embedding 质量",
     href: "",
@@ -57,7 +57,7 @@ export default function HomePage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader
         title="多 Agent 科研论文助手"
-        description="上传 PDF、构建论文记忆、RAG 问答、Idea 抽取、Agent 引用推荐 — 一站式科研辅助平台"
+        description="上传 PDF、构建论文记忆、RAG 问答、Idea 抽取、Agent 引用推荐 - 一站式科研辅助平台"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

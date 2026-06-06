@@ -7,7 +7,7 @@ interface EmptyStateProps {
   actions?: { label: string; href: string; primary?: boolean }[];
 }
 
-export default function EmptyState({ icon = "📄", title, description, actions }: EmptyStateProps) {
+export default function EmptyState({ icon = "空", title, description, actions }: EmptyStateProps) {
   return (
     <div className="text-center py-12 px-4">
       <div className="text-4xl mb-3">{icon}</div>

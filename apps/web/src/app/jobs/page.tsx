@@ -197,7 +197,7 @@ export default function JobsPage() {
                 <span>{new Date(job.created_at).toLocaleString()}</span>
                 {job.finished_at && (
                   <>
-                    <span className="mx-2">→</span>
+                    <span className="mx-2">至</span>
                     <span>{new Date(job.finished_at).toLocaleString()}</span>
                   </>
                 )}

@@ -44,7 +44,7 @@ export default function McpPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader
         title="MCP 工具"
-        description="Model Context Protocol 工具集 — 外部 AI 客户端通过 MCP 协议访问论文库与 Idea 库的接口，不等同于 Web API 全量映射"
+        description="Model Context Protocol 工具集 - 外部 AI 客户端通过 MCP 协议访问论文库与 Idea 库的接口，不等同于 Web API 全量映射"
         actions={[
           { label: "论文库", href: "/papers", primary: false },
           { label: "Agent 工作流", href: "/agent", primary: false },

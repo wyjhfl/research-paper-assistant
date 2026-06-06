@@ -1,5 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
+const reuseExistingServer =
+  process.env.E2E_REUSE_EXISTING_SERVER === "true" ||
+  process.env.npm_lifecycle_event === "test:e2e:reuse";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
@@ -18,7 +22,7 @@ export default defineConfig({
     : {
         command: "npx next dev -p 3001",
         port: 3001,
-        reuseExistingServer: false,
+        reuseExistingServer,
         timeout: 60_000,
       },
 });

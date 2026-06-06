@@ -23,7 +23,7 @@ async def reader_node(session: AsyncSession, state: AgentState) -> AgentState:
         state.warnings.append(f"Paper {state.paper_id} is not ready (status={paper.status})")
         return state
 
-    chunks = await repo.get_chunks_by_paper(state.paper_id)
+    chunks = await repo.get_chunks_by_paper(state.paper_id, user_id=state.user_id)
     if not chunks:
         state.summary = {
             "title": paper.title,

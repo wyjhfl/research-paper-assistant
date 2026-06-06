@@ -121,7 +121,7 @@ async def test_rebuild_embeddings_calls_correct_method():
 
     result = await svc.rebuild_embeddings(1)
 
-    mock_repo.clear_embeddings.assert_called_once_with(1)
+    mock_repo.clear_embeddings.assert_called_once_with(1, user_id="default")
     mock_embedding.embed_chunks_for_paper.assert_called_once_with(1)
     assert result == 3
 

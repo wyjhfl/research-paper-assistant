@@ -8,7 +8,17 @@ const MOJIBAKE_CODE_POINTS = [
   0x93C8, 0x951B, 0xFFFD,
 ];
 
+const DISCOURAGED_CODE_POINTS = [
+  0x00B7, 0x00D7, 0x2013, 0x2014, 0x2192,
+  0x1F4A1, 0x1F4AC, 0x1F4C4, 0x1F4CA, 0x1F4DA, 0x1F50D, 0x1F527, 0x1F916,
+];
+
+const MOJIBAKE_SUBSTRINGS = ['icon="??"', 'icon: "??"', ">??<", "馃", "鈫", "鉁", "锛", "銆", "Ў"];
+
 const MOJIBAKE_CHARS = MOJIBAKE_CODE_POINTS.map((cp) =>
+  String.fromCodePoint(cp)
+);
+const DISCOURAGED_CHARS = DISCOURAGED_CODE_POINTS.map((cp) =>
   String.fromCodePoint(cp)
 );
 
@@ -23,14 +33,23 @@ function buildMojibakeRe(): RegExp {
 const MOJIBAKE_RE = buildMojibakeRe();
 
 const SCAN_FILES = [
+  "src/app/page.tsx",
+  "src/app/loading.tsx",
+  "src/app/not-found.tsx",
+  "src/app/ideas/page.tsx",
+  "src/app/ideas/[id]/page.tsx",
+  "src/app/papers/page.tsx",
+  "src/app/papers/[id]/page.tsx",
+  "src/app/mcp/page.tsx",
   "src/lib/api.ts",
   "src/app/login/page.tsx",
   "src/app/register/page.tsx",
   "src/app/jobs/page.tsx",
+  "src/components/EmptyState.tsx",
   "src/components/UserSwitcher.tsx",
+  "src/components/UsageDashboard.tsx",
   "tests/e2e/auth.spec.ts",
   "tests/e2e/jobs.spec.ts",
-  "tests/e2e/no-mojibake.spec.ts",
 ];
 
 for (const relPath of SCAN_FILES) {
@@ -47,6 +66,18 @@ for (const relPath of SCAN_FILES) {
       }
     }
     expect(content).not.toMatch(MOJIBAKE_RE);
+    for (let i = 0; i < DISCOURAGED_CHARS.length; i++) {
+      const ch = DISCOURAGED_CHARS[i];
+      if (content.includes(ch)) {
+        const cp = DISCOURAGED_CODE_POINTS[i];
+        throw new Error(
+          `${relPath} contains discouraged Unicode U+${cp.toString(16).toUpperCase().padStart(4, "0")}`
+        );
+      }
+    }
+    for (const marker of MOJIBAKE_SUBSTRINGS) {
+      expect(content, `${relPath} contains mojibake marker ${marker}`).not.toContain(marker);
+    }
   });
 }
 

@@ -1,5 +1,5 @@
-import { fetchIdea } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-user";
+import { fetchIdeaServer } from "@/lib/api";
+import { getServerSessionCookieHeader, getServerUserId } from "@/lib/server-user";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import IdeaDetailClient from "@/components/IdeaDetailClient";
@@ -16,7 +16,11 @@ export default async function IdeaDetailPage({ params }: IdeaDetailPageProps) {
   let error = false;
 
   try {
-    idea = await fetchIdea(parseInt(id, 10), await getServerUserId());
+    idea = await fetchIdeaServer(
+      parseInt(id, 10),
+      await getServerUserId(),
+      await getServerSessionCookieHeader(),
+    );
   } catch {
     error = true;
   }
@@ -81,7 +85,7 @@ export default async function IdeaDetailPage({ params }: IdeaDetailPageProps) {
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="text-xs font-medium text-gray-500">#{idx + 1}</span>
                   <span className="text-xs text-gray-400">Chunk #{source.chunk_index}</span>
-                  <span className="text-xs text-gray-400">第 {source.page_start}–{source.page_end} 页</span>
+                  <span className="text-xs text-gray-400">第 {source.page_start}-{source.page_end} 页</span>
                 </div>
                 <p className="text-xs text-gray-600 leading-relaxed">{source.text_excerpt}</p>
               </div>

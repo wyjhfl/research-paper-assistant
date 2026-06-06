@@ -218,7 +218,7 @@ export default function UsageDashboard() {
 
       {calls && calls.events.length === 0 && (
         <div className="mb-6 text-center py-8" data-testid="usage-empty">
-          <div className="text-4xl mb-3">📊</div>
+          <div className="text-4xl mb-3">审计</div>
           <h3 className="text-lg font-semibold text-gray-700 mb-1">暂无调用记录</h3>
           <p className="text-sm text-gray-500">模型调用审计记录将在此处展示</p>
         </div>
