@@ -26,6 +26,14 @@ def _resolve_schema(schema: dict, spec: dict) -> dict:
     return schema
 
 
+def _success_response_schema(spec: dict, path: str, method: str) -> dict:
+    method_spec = spec["paths"][path][method]
+    responses = method_spec.get("responses", {})
+    success_code = "200" if "200" in responses else "201"
+    content = responses[success_code]["content"]["application/json"]
+    return _resolve_schema(content["schema"], spec)
+
+
 @pytest.mark.asyncio
 async def test_ask_paper_has_request_body_schema():
     transport = ASGITransport(app=app)
@@ -68,6 +76,24 @@ async def test_paper_search_has_request_body_schema():
     assert "query" in props
     assert "paper_ids" in props
     assert "top_k" in props
+
+
+@pytest.mark.asyncio
+async def test_ask_responses_include_query_expansion_fields():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/openapi.json")
+    spec = resp.json()
+
+    ask_schema = _success_response_schema(spec, "/papers/{paper_id}/ask", "post")
+    ask_props = ask_schema.get("properties", {})
+    assert "query_expansion_applied" in ask_props
+    assert "expanded_query_terms" in ask_props
+
+    multi_schema = _success_response_schema(spec, "/papers/ask", "post")
+    multi_props = multi_schema.get("properties", {})
+    assert "query_expansion_applied" in multi_props
+    assert "expanded_query_terms" in multi_props
 
 
 @pytest.mark.asyncio

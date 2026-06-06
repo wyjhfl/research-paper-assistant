@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, bindparam
@@ -18,6 +18,7 @@ from .lexical_retrieval import (
     determine_retrieval_mode,
     is_local_embedding_provider,
 )
+from .query_expansion import QueryExpansionResult, should_expand_query
 from .model_call_audit_service import record_model_call
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,8 @@ class MultiPaperAnswerResult:
     evidence_gate_reason: str = ""
     retrieved_source_count: int = 0
     top_source_score: float = 0.0
+    query_expansion_applied: bool = False
+    expanded_query_terms: list[str] = field(default_factory=list)
 
 
 class MultiPaperRAGService:
@@ -77,9 +80,9 @@ class MultiPaperRAGService:
         top_k: int = 8,
         per_paper_limit: int = 3,
         question: str = "",
-    ) -> list[MultiPaperRetrievedChunk]:
+    ) -> tuple[list[MultiPaperRetrievedChunk], QueryExpansionResult]:
         if not paper_ids:
-            return []
+            return [], QueryExpansionResult(original_query=question, expanded_query=question, applied=False, reason="no_papers")
 
         emb_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
 
@@ -118,6 +121,17 @@ class MultiPaperRAGService:
         per_paper_count: dict[int, int] = {}
         candidates: list[MultiPaperRetrievedChunk] = []
 
+        expansion_result = QueryExpansionResult(original_query=question, expanded_query=question, applied=False, reason="")
+        if (
+            settings.LEXICAL_RETRIEVAL_ENABLED
+            and question
+            and should_expand_query(settings.QUERY_EXPANSION_ENABLED, settings.QUERY_EXPANSION_MODE)
+        ):
+            from .query_expansion import expand_query
+            expansion_result = expand_query(question)
+
+        scoring_query = expansion_result.expanded_query if expansion_result.applied else question
+
         for row in rows:
             pid = row.paper_id
             text_val = row.text
@@ -130,7 +144,9 @@ class MultiPaperRAGService:
             retrieval_mode = "vector"
 
             if settings.LEXICAL_RETRIEVAL_ENABLED and question:
-                lex_result = compute_lexical_score(question, text_val, row.paper_title)
+                lex_result = compute_lexical_score(
+                    scoring_query, text_val, row.paper_title,
+                )
                 lexical = lex_result.score
                 final_score = compute_hybrid_score(
                     vector_score, lexical,
@@ -167,7 +183,7 @@ class MultiPaperRAGService:
             if len(retrieved) >= top_k:
                 break
 
-        return retrieved
+        return retrieved, expansion_result
 
     async def search(
         self,
@@ -184,10 +200,11 @@ class MultiPaperRAGService:
             query, metadata={"paper_ids": eligible_ids},
         )
         per_paper_limit = max(top_k // 2, 2)
-        return await self._retrieve_multi(
+        retrieved, _ = await self._retrieve_multi(
             query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit,
             question=query,
         )
+        return retrieved
 
     async def ask(
         self,
@@ -207,6 +224,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason="no_chunks",
                 retrieved_source_count=0,
                 top_source_score=0.0,
+                query_expansion_applied=False,
+                expanded_query_terms=[],
             )
 
         query_embedding = await self.embedding_service.embed_query(
@@ -214,10 +233,13 @@ class MultiPaperRAGService:
         )
 
         per_paper_limit = max(top_k // 2, 2)
-        retrieved = await self._retrieve_multi(
+        retrieved, expansion = await self._retrieve_multi(
             query_embedding, eligible_ids, top_k=top_k, per_paper_limit=per_paper_limit,
             question=question,
         )
+
+        exp_applied = expansion.applied
+        exp_terms = expansion.expanded_terms[:8] if expansion.applied else []
 
         if not retrieved:
             return MultiPaperAnswerResult(
@@ -228,6 +250,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason="no_retrieved",
                 retrieved_source_count=0,
                 top_source_score=0.0,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         top_score = retrieved[0].score
@@ -243,6 +267,8 @@ class MultiPaperRAGService:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, eligible_ids, "score_below_threshold",
+                    query_expansion_applied=exp_applied,
+                    expanded_query_terms=exp_terms,
                 )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -252,15 +278,20 @@ class MultiPaperRAGService:
                 evidence_gate_reason="score_below_threshold",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # Check query tokens for evidence gate
         from .lexical_retrieval import tokenize as lex_tokenize
-        query_tokens = set(lex_tokenize(question))
+        check_query = expansion.expanded_query if expansion.applied else question
+        query_tokens = set(lex_tokenize(check_query))
         if not query_tokens:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, eligible_ids, "no_query_tokens",
+                    query_expansion_applied=exp_applied,
+                    expanded_query_terms=exp_terms,
                 )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -270,6 +301,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason="no_query_tokens",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # Check lexical evidence overlap
@@ -286,6 +319,8 @@ class MultiPaperRAGService:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, eligible_ids, "evidence_below_threshold",
+                    query_expansion_applied=exp_applied,
+                    expanded_query_terms=exp_terms,
                 )
             return MultiPaperAnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -295,6 +330,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason="evidence_below_threshold",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # For local provider with lexical retrieval: check if any lexical match exists
@@ -303,6 +340,8 @@ class MultiPaperRAGService:
                 if allow_low_confidence_answer and source_count > 0:
                     return await self._generate_low_confidence_answer(
                         question, retrieved, confidence, eligible_ids, "no_lexical_match",
+                        query_expansion_applied=exp_applied,
+                        expanded_query_terms=exp_terms,
                     )
                 return MultiPaperAnswerResult(
                     answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -312,6 +351,8 @@ class MultiPaperRAGService:
                     evidence_gate_reason="no_lexical_match",
                     retrieved_source_count=source_count,
                     top_source_score=top_score,
+                    query_expansion_applied=exp_applied,
+                    expanded_query_terms=exp_terms,
                 )
 
         contexts = [r.text_excerpt for r in retrieved]
@@ -354,6 +395,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason="llm_failed",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         return MultiPaperAnswerResult(
@@ -364,6 +407,8 @@ class MultiPaperRAGService:
             evidence_gate_reason="",
             retrieved_source_count=source_count,
             top_source_score=top_score,
+            query_expansion_applied=exp_applied,
+            expanded_query_terms=exp_terms,
         )
 
     async def _generate_low_confidence_answer(
@@ -373,6 +418,8 @@ class MultiPaperRAGService:
         confidence: float,
         eligible_ids: list[int],
         gate_reason: str,
+        query_expansion_applied: bool = False,
+        expanded_query_terms: list[str] | None = None,
     ) -> MultiPaperAnswerResult:
         contexts = [r.text_excerpt for r in retrieved]
         source_count = len(retrieved)
@@ -400,6 +447,8 @@ class MultiPaperRAGService:
                 evidence_gate_reason=gate_reason,
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=query_expansion_applied,
+                expanded_query_terms=expanded_query_terms or [],
             )
         except (ProviderConfigurationError, ProviderRequestError, ProviderResponseError) as e:
             await record_model_call(
@@ -425,4 +474,6 @@ class MultiPaperRAGService:
                 evidence_gate_reason="llm_failed",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=query_expansion_applied,
+                expanded_query_terms=expanded_query_terms or [],
             )

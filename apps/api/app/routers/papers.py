@@ -176,6 +176,8 @@ async def ask_paper(
         "evidence_gate_reason": result.evidence_gate_reason,
         "retrieved_source_count": result.retrieved_source_count,
         "top_source_score": result.top_source_score,
+        "query_expansion_applied": result.query_expansion_applied,
+        "expanded_query_terms": result.expanded_query_terms or [],
     }
 
 
@@ -296,6 +298,8 @@ async def multi_paper_ask(
         "evidence_gate_reason": result.evidence_gate_reason,
         "retrieved_source_count": result.retrieved_source_count,
         "top_source_score": result.top_source_score,
+        "query_expansion_applied": result.query_expansion_applied,
+        "expanded_query_terms": result.expanded_query_terms or [],
     }
 
 

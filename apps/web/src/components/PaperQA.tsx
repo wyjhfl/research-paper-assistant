@@ -135,6 +135,17 @@ export default function PaperQA({ paperId }: PaperQAProps) {
               </div>
             )}
 
+            {result.query_expansion_applied && (
+              <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs text-blue-700">
+                  已启用关键词扩展
+                  {result.expanded_query_terms && result.expanded_query_terms.length > 0 && (
+                    <> - 扩展词：{result.expanded_query_terms.slice(0, 8).join(", ")}</>
+                  )}
+                </p>
+              </div>
+            )}
+
             <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
               {result.answer}
             </p>

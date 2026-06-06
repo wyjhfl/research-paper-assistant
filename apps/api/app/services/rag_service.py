@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -18,6 +18,7 @@ from .lexical_retrieval import (
     determine_retrieval_mode,
     is_local_embedding_provider,
 )
+from .query_expansion import QueryExpansionResult, should_expand_query
 from .model_call_audit_service import record_model_call
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ class AnswerResult:
     evidence_gate_reason: str = ""
     retrieved_source_count: int = 0
     top_source_score: float = 0.0
+    query_expansion_applied: bool = False
+    expanded_query_terms: list[str] = field(default_factory=list)
 
 
 class RAGService:
@@ -91,7 +94,9 @@ class RAGService:
             question, metadata={"paper_id": paper_id},
         )
 
-        retrieved = await self._retrieve(paper_id, query_embedding, question, paper.title)
+        retrieved, expansion = await self._retrieve(paper_id, query_embedding, question, paper.title)
+        exp_applied = expansion.applied
+        exp_terms = expansion.expanded_terms[:8] if expansion.applied else []
 
         if not retrieved:
             return AnswerResult(
@@ -102,6 +107,8 @@ class RAGService:
                 evidence_gate_reason="no_retrieved",
                 retrieved_source_count=0,
                 top_source_score=0.0,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         top_score = retrieved[0].score
@@ -117,6 +124,7 @@ class RAGService:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, paper_id, "score_below_threshold",
+                    exp_applied, exp_terms,
                 )
             return AnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -126,15 +134,20 @@ class RAGService:
                 evidence_gate_reason="score_below_threshold",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # Check query tokens for evidence gate
         from .lexical_retrieval import tokenize as lex_tokenize
-        query_tokens = set(lex_tokenize(question))
+        # Use expanded query tokens if expansion was applied
+        check_query = expansion.expanded_query if expansion.applied else question
+        query_tokens = set(lex_tokenize(check_query))
         if not query_tokens:
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, paper_id, "no_query_tokens",
+                    exp_applied, exp_terms,
                 )
             return AnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -144,6 +157,8 @@ class RAGService:
                 evidence_gate_reason="no_query_tokens",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # Check lexical evidence overlap
@@ -158,11 +173,10 @@ class RAGService:
             evidence_threshold = settings.LEXICAL_SCORE_THRESHOLD
 
         if best_lexical < evidence_threshold and not is_local_embedding_provider():
-            # Only apply evidence gate for non-local providers
-            # For local provider, lexical score IS the evidence
             if allow_low_confidence_answer and source_count > 0:
                 return await self._generate_low_confidence_answer(
                     question, retrieved, confidence, paper_id, "evidence_below_threshold",
+                    exp_applied, exp_terms,
                 )
             return AnswerResult(
                 answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -172,6 +186,8 @@ class RAGService:
                 evidence_gate_reason="evidence_below_threshold",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         # For local provider with lexical retrieval: check if any lexical match exists
@@ -180,6 +196,7 @@ class RAGService:
                 if allow_low_confidence_answer and source_count > 0:
                     return await self._generate_low_confidence_answer(
                         question, retrieved, confidence, paper_id, "no_lexical_match",
+                        exp_applied, exp_terms,
                     )
                 return AnswerResult(
                     answer="当前论文片段不足以回答，不生成无依据答案。",
@@ -189,6 +206,8 @@ class RAGService:
                     evidence_gate_reason="no_lexical_match",
                     retrieved_source_count=source_count,
                     top_source_score=top_score,
+                    query_expansion_applied=exp_applied,
+                    expanded_query_terms=exp_terms,
                 )
 
         contexts = [r.text_excerpt for r in retrieved]
@@ -231,6 +250,8 @@ class RAGService:
                 evidence_gate_reason="llm_failed",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=exp_applied,
+                expanded_query_terms=exp_terms,
             )
 
         return AnswerResult(
@@ -241,6 +262,8 @@ class RAGService:
             evidence_gate_reason="",
             retrieved_source_count=source_count,
             top_source_score=top_score,
+            query_expansion_applied=exp_applied,
+            expanded_query_terms=exp_terms,
         )
 
     async def _generate_low_confidence_answer(
@@ -250,6 +273,8 @@ class RAGService:
         confidence: float,
         paper_id: int,
         gate_reason: str,
+        query_expansion_applied: bool = False,
+        expanded_query_terms: list[str] | None = None,
     ) -> AnswerResult:
         contexts = [r.text_excerpt for r in retrieved]
         source_count = len(retrieved)
@@ -277,6 +302,8 @@ class RAGService:
                 evidence_gate_reason=gate_reason,
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=query_expansion_applied,
+                expanded_query_terms=expanded_query_terms or [],
             )
         except (ProviderConfigurationError, ProviderRequestError, ProviderResponseError) as e:
             await record_model_call(
@@ -302,11 +329,13 @@ class RAGService:
                 evidence_gate_reason="llm_failed",
                 retrieved_source_count=source_count,
                 top_source_score=top_score,
+                query_expansion_applied=query_expansion_applied,
+                expanded_query_terms=expanded_query_terms or [],
             )
 
     async def _retrieve(
         self, paper_id: int, query_embedding: list[float], question: str = "", paper_title: str = "",
-    ) -> list[RetrievedChunk]:
+    ) -> tuple[list[RetrievedChunk], QueryExpansionResult]:
         emb_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
         sql = text("""
             SELECT id, chunk_index, page_start, page_end, text,
@@ -326,6 +355,20 @@ class RAGService:
         )
         rows = result.fetchall()
 
+        # Compute query expansion once for all chunks
+        expansion_result = QueryExpansionResult(
+            original_query=question, expanded_query=question, applied=False, reason="",
+        )
+        if (
+            settings.LEXICAL_RETRIEVAL_ENABLED
+            and question
+            and should_expand_query(settings.QUERY_EXPANSION_ENABLED, settings.QUERY_EXPANSION_MODE)
+        ):
+            from .query_expansion import expand_query
+            expansion_result = expand_query(question)
+
+        scoring_query = expansion_result.expanded_query if expansion_result.applied else question
+
         retrieved: list[RetrievedChunk] = []
         for row in rows:
             text_val = row.text
@@ -338,7 +381,9 @@ class RAGService:
             retrieval_mode = "vector"
 
             if settings.LEXICAL_RETRIEVAL_ENABLED and question:
-                lex_result = compute_lexical_score(question, text_val, paper_title)
+                lex_result = compute_lexical_score(
+                    scoring_query, text_val, paper_title,
+                )
                 lexical = lex_result.score
                 final_score = compute_hybrid_score(
                     vector_score, lexical,
@@ -362,7 +407,7 @@ class RAGService:
 
         # Re-sort by final hybrid score
         retrieved.sort(key=lambda r: r.score, reverse=True)
-        return retrieved
+        return retrieved, expansion_result
 
 
 class PaperNotFoundError(Exception):

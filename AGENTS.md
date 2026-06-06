@@ -9,8 +9,9 @@
 - **当前能力**：
   - PDF 上传解析（pypdf 按页提取 + 固定字符切分 + 重叠）
   - chunk 入库（pgvector embedding）
-  - 单论文 RAG 问答（向量检索 + evidence gate + LLM 生成）
-  - 跨论文 RAG 问答（多论文联合检索 + per_paper_limit + paper_title 来源）
+  - 单论文 RAG 问答（向量检索 + hybrid lexical retrieval + evidence gate + LLM 生成）
+  - 跨论文 RAG 问答（多论文联合检索 + hybrid lexical retrieval + per_paper_limit + paper_title 来源）
+  - 中文问题跨语言关键词扩展（静态中英学术词典，仅用于 lexical scoring，不改变原始问题）
   - Idea 抽取与保存（启发式抽取 + 来源追溯 + 标签 + 置信度）
   - LangGraph Agent 工作流（Supervisor → Reader/Idea/Citation/MultiCitation → Reflection）
   - MCP Server（6 tools + stdio transport + 安全收口）
@@ -235,6 +236,7 @@ E2E_REUSE_EXISTING_SERVER=true npm run test:e2e:reuse
 64. **issue/report 不得包含 .env、API key、完整日志 secret**：问题报告（POST_RELEASE_ISSUE_TEMPLATE）中不得粘贴 `.env` 内容、真实 API Key（sk-/tp- 前缀）、DATABASE_URL 真实值、Authorization header、session token。敏感信息必须用 `<REDACTED>` 替换。
 65. **v1.0.1 只能修复明确问题，不把大功能塞进 patch release**：v1.0.1 是 patch 版本，只修复 P0/P1 级明确问题。P2/P3 项和新增功能应排到 v1.1.0 或 v2.0.0。
 66. **Windows PATH 含中文路径会导致 git 不可用**：Git 安装在含中文字符的路径（如 `D:\codex安装\tools\Git\cmd`）时，Windows 系统 PATH 中的中文可能被编码损坏（如 `锟斤拷装`），导致 `shutil.which("git")` 返回 None、PowerShell 找不到 git。所有 Python 脚本中需要调用 git 的地方必须使用 `resolve_git()` 函数（`shutil.which` → `winreg` 注册表回退 → `ProgramFiles` 常见路径 → PATH 扫描修复），不能硬编码 `"git"` 或绝对路径。`resolve_git()` 已在 `pre_tag_check.py` 和 `collect_rc_evidence.py` 中实现，新增脚本如需调用 git 必须复用此模式。
+67. **local embedding 下 RAG 召回仍受 vector 候选池限制**：hybrid lexical retrieval 和静态中文查询扩展只对已取回候选重排；当前 SQL 仍先按 pgvector 分数取候选。local hash embedding 语义弱，可能漏掉真正关键词命中的 chunk。后续如继续提升个人本地 RAG，应扩大候选池或增加 user_id 安全过滤的 lexical-only candidate 查询，但不得用 expanded query 替换 LLM 原始 question，也不得把 expanded query 写入审计 metadata。
 
 ## 八、Review Checklist
 

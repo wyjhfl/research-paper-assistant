@@ -258,6 +258,17 @@ export default function MultiPaperQA() {
               </div>
             )}
 
+            {result.query_expansion_applied && (
+              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs text-blue-700">
+                  已启用关键词扩展
+                  {result.expanded_query_terms && result.expanded_query_terms.length > 0 && (
+                    <> - 扩展词：{result.expanded_query_terms.slice(0, 8).join(", ")}</>
+                  )}
+                </p>
+              </div>
+            )}
+
             <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
               {result.answer}
             </p>
@@ -305,7 +316,7 @@ export default function MultiPaperQA() {
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs text-gray-500">
-                      <span>第 {source.page_start}–{source.page_end} 页</span>
+                      <span>第 {source.page_start} 至 {source.page_end} 页</span>
                       <span>片段 #{source.chunk_index}</span>
                       <span className="font-medium text-blue-600">
                         相关度: {(source.score * 100).toFixed(1)}%

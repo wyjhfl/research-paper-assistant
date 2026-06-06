@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     HYBRID_VECTOR_WEIGHT: float = 0.7
     HYBRID_LEXICAL_WEIGHT: float = 0.3
 
+    QUERY_EXPANSION_ENABLED: bool = True
+    QUERY_EXPANSION_MODE: str = "static"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -18,6 +18,7 @@ from app.services.rag_service import RAGService, AnswerResult, RetrievedChunk, P
 from app.services.multi_paper_rag_service import (
     MultiPaperRAGService, MultiPaperAnswerResult, MultiPaperRetrievedChunk,
 )
+from app.services.query_expansion import QueryExpansionResult
 
 TEST_DATABASE_URL = settings.DATABASE_URL.replace(
     "/research_assistant", "/research_assistant_test"
@@ -94,7 +95,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=low_score_chunks)
+        service._retrieve = AsyncMock(return_value=(low_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(paper_id=1, question="deep learning optimization")
         assert result.status == "insufficient_context"
@@ -124,7 +125,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=low_score_chunks)
+        service._retrieve = AsyncMock(return_value=(low_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Based on the fragments, models may refer to..."
 
@@ -186,7 +187,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=[])
+        service._retrieve = AsyncMock(return_value=([], QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(paper_id=1, question="test")
         assert result.status == "insufficient_context"
@@ -213,7 +214,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=medium_score_chunks)
+        service._retrieve = AsyncMock(return_value=(medium_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(paper_id=1, question="quantum entanglement experiments")
         assert result.status == "insufficient_context"
@@ -241,7 +242,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=medium_score_chunks)
+        service._retrieve = AsyncMock(return_value=(medium_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Based on limited context..."
 
@@ -274,7 +275,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=good_chunks)
+        service._retrieve = AsyncMock(return_value=(good_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Deep learning models achieve SOTA."
 
@@ -307,7 +308,7 @@ class TestRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=good_chunks)
+        service._retrieve = AsyncMock(return_value=(good_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.side_effect = ProviderRequestError("API error")
 
@@ -344,7 +345,7 @@ class TestMultiPaperRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve_multi = AsyncMock(return_value=low_score_chunks)
+        service._retrieve_multi = AsyncMock(return_value=(low_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(question="deep learning", paper_ids=[1])
         assert result.status == "insufficient_context"
@@ -371,7 +372,7 @@ class TestMultiPaperRAGServiceEvidenceGate:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve_multi = AsyncMock(return_value=low_score_chunks)
+        service._retrieve_multi = AsyncMock(return_value=(low_score_chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Based on fragments..."
 
@@ -528,3 +529,47 @@ class TestRAGUXIntegration:
         data = resp.json()
         # Should be insufficient_context, not low_confidence_answer
         assert data["status"] == "insufficient_context"
+
+    @pytest.mark.asyncio
+    async def test_chinese_query_response_includes_expansion_fields(self, client: AsyncClient):
+        """Chinese question response includes query_expansion_applied and expanded_query_terms."""
+        pid = await _upload_paper(client, "The main contribution of this paper is a novel attention mechanism.")
+
+        resp = await client.post(
+            f"/papers/{pid}/ask",
+            json={"question": "这篇论文的核心贡献是什么"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "query_expansion_applied" in data
+        assert "expanded_query_terms" in data
+        assert isinstance(data["query_expansion_applied"], bool)
+        assert isinstance(data["expanded_query_terms"], list)
+
+    @pytest.mark.asyncio
+    async def test_english_query_no_expansion(self, client: AsyncClient):
+        """English question does not trigger query expansion."""
+        pid = await _upload_paper(client, "The main contribution is a novel method.")
+
+        resp = await client.post(
+            f"/papers/{pid}/ask",
+            json={"question": "What is the main contribution?"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query_expansion_applied"] is False
+        assert data["expanded_query_terms"] == []
+
+    @pytest.mark.asyncio
+    async def test_multi_paper_chinese_query_expansion(self, client: AsyncClient):
+        """Multi-paper Chinese question triggers query expansion."""
+        pid = await _upload_paper(client, "The main contribution is a novel attention mechanism.")
+
+        resp = await client.post(
+            "/papers/ask",
+            json={"question": "这几篇论文的核心贡献是什么", "paper_ids": [pid]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "query_expansion_applied" in data
+        assert "expanded_query_terms" in data

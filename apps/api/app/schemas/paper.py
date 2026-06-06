@@ -94,6 +94,8 @@ class AskResponse(BaseModel):
     evidence_gate_reason: str = ""
     retrieved_source_count: int = 0
     top_source_score: float = 0.0
+    query_expansion_applied: bool = False
+    expanded_query_terms: list[str] = Field(default_factory=list)
 
 
 class EmbeddingRebuildResponse(BaseModel):
@@ -139,6 +141,8 @@ class MultiPaperAskResponse(BaseModel):
     evidence_gate_reason: str = ""
     retrieved_source_count: int = 0
     top_source_score: float = 0.0
+    query_expansion_applied: bool = False
+    expanded_query_terms: list[str] = Field(default_factory=list)
 
 
 class PaperSearchRequest(BaseModel):

@@ -16,6 +16,7 @@ from app.services.rag_service import RAGService, AnswerResult, RetrievedChunk
 from app.services.multi_paper_rag_service import (
     MultiPaperRAGService, MultiPaperAnswerResult, MultiPaperRetrievedChunk,
 )
+from app.services.query_expansion import QueryExpansionResult
 
 
 # ============================================================
@@ -217,7 +218,7 @@ class TestRAGServiceHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=chunks)
+        service._retrieve = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Deep learning achieves SOTA."
 
@@ -256,7 +257,7 @@ class TestRAGServiceHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=chunks)
+        service._retrieve = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(paper_id=1, question="quantum entanglement experiments")
         assert result.status == "insufficient_context"
@@ -311,7 +312,7 @@ class TestRAGServiceHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=chunks)
+        service._retrieve = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Based on limited context..."
 
@@ -352,7 +353,7 @@ class TestRAGServiceHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve = AsyncMock(return_value=chunks)
+        service._retrieve = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "DL achieves SOTA."
 
@@ -403,7 +404,7 @@ class TestMultiPaperRAGHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve_multi = AsyncMock(return_value=chunks)
+        service._retrieve_multi = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
         service.llm_provider = AsyncMock()
         service.llm_provider.generate_answer.return_value = "Deep learning is used for NLP."
 
@@ -443,7 +444,7 @@ class TestMultiPaperRAGHybridRetrieval:
         service.repo = mock_repo
         service.embedding_service = AsyncMock()
         service.embedding_service.embed_query.return_value = [0.1] * 384
-        service._retrieve_multi = AsyncMock(return_value=chunks)
+        service._retrieve_multi = AsyncMock(return_value=(chunks, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
         result = await service.ask(question="quantum computing", paper_ids=[1])
         assert result.status == "insufficient_context"
@@ -461,3 +462,46 @@ class TestMultiPaperRAGHybridRetrieval:
 
         result = await service.ask(question="anything", paper_ids=[99999])
         assert result.status == "insufficient_context"
+
+
+# ============================================================
+# Query expansion + lexical retrieval integration
+# ============================================================
+
+class TestQueryExpansionLexicalIntegration:
+    def test_chinese_query_expansion_improves_lexical_score(self):
+        """Chinese query on English chunk: lexical_score goes from 0 to >0 with expansion."""
+        from app.services.lexical_retrieval import compute_lexical_score, compute_lexical_score_with_expansion
+
+        query = "这篇论文的核心贡献是什么"
+        chunk = "The main contribution of this paper is a novel attention mechanism."
+
+        # Without expansion: Chinese bigrams cannot match English
+        result_plain = compute_lexical_score(query, chunk)
+        assert result_plain.score == 0.0
+
+        # With expansion: English keywords match
+        result_exp, expansion = compute_lexical_score_with_expansion(query, chunk)
+        assert expansion.applied is True
+        assert result_exp.score > 0.0
+
+    def test_expansion_does_not_change_original_query_for_llm(self):
+        """Expansion only affects lexical scoring, not the original question."""
+        from app.services.query_expansion import expand_query
+
+        original = "这篇论文的核心贡献是什么"
+        result = expand_query(original)
+        assert result.original_query == original
+        # The expanded query contains original + English terms
+        assert result.expanded_query.startswith(original)
+
+    def test_chinese_limitation_expansion_matches_english(self):
+        """Chinese '局限' expansion matches English 'limitation' in chunk."""
+        from app.services.lexical_retrieval import compute_lexical_score_with_expansion
+
+        result, expansion = compute_lexical_score_with_expansion(
+            "这篇论文有什么局限",
+            "One limitation of our approach is the high computational cost.",
+        )
+        assert expansion.applied is True
+        assert result.score > 0.0

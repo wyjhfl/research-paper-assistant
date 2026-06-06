@@ -111,6 +111,8 @@ export interface AskResponse {
   evidence_gate_reason?: string;
   retrieved_source_count?: number;
   top_source_score?: number;
+  query_expansion_applied?: boolean;
+  expanded_query_terms?: string[];
 }
 
 export interface EmbeddingRebuildResponse {
@@ -416,6 +418,8 @@ export interface MultiPaperAskResponse {
   evidence_gate_reason?: string;
   retrieved_source_count?: number;
   top_source_score?: number;
+  query_expansion_applied?: boolean;
+  expanded_query_terms?: string[];
 }
 
 export interface PaperSearchResponse {

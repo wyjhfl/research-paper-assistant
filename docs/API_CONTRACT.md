@@ -524,7 +524,9 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
   ],
   "evidence_gate_reason": "",
   "retrieved_source_count": 5,
-  "top_source_score": 0.82
+  "top_source_score": 0.82,
+  "query_expansion_applied": false,
+  "expanded_query_terms": []
 }
 ```
 
@@ -537,6 +539,8 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 | evidence_gate_reason | string | 拒答原因（空字符串=通过门控） |
 | retrieved_source_count | int | 检索到的来源数量 |
 | top_source_score | float | 最高来源相关度分数 |
+| query_expansion_applied | bool | 是否启用了跨语言查询扩展（默认 false） |
+| expanded_query_terms | string[] | 扩展的英文关键词列表（最多 8 个） |
 
 **source item 字段**：
 
@@ -576,6 +580,13 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 - `source_count=0` 时即使 `allow_low_confidence_answer=true` 也拒答
 - `insufficient_context` 时 `answer` 为固定提示，不允许编造答案
 - `confidence` 范围 [0, 1]
+
+**query_expansion 说明**：
+- `query_expansion_applied=true` 表示中文问题触发了跨语言关键词扩展
+- `expanded_query_terms` 包含扩展的英文关键词（如 `["contribution", "core", "method"]`）
+- 扩展仅用于关键词检索匹配，不改变用户原始问题
+- 不调用外部模型，基于静态中英学术词典
+- 不记录 API Key / prompt / chunk 全文
 
 **用户隔离**：只能对当前 user_id 的论文提问。
 
@@ -631,7 +642,9 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
   ],
   "evidence_gate_reason": "",
   "retrieved_source_count": 8,
-  "top_source_score": 0.79
+  "top_source_score": 0.79,
+  "query_expansion_applied": false,
+  "expanded_query_terms": []
 }
 ```
 
@@ -653,7 +666,7 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 
 ### POST /papers/search
 
-用途：纯向量检索，不调用 LLM，只返回匹配的 chunk。
+用途：检索论文片段，不调用 LLM，只返回匹配的 chunk。当前检索可能使用 vector、lexical 或 hybrid 评分。
 
 **请求体**：
 
@@ -1331,3 +1344,33 @@ Phase 34 起，RAG 检索支持 hybrid 模式，在 local embedding 场景下通
 - **真实 embedding**：混合排序（`HYBRID_VECTOR_WEIGHT * vector + HYBRID_LEXICAL_WEIGHT * lexical`），evidence gate 使用 `RAG_SCORE_THRESHOLD` + `RAG_EVIDENCE_THRESHOLD`
 - 关键词匹配不依赖外部 API，基于 token overlap + query recall + phrase bonus + title bonus
 - 不破坏已有真实 embedding 路径
+
+---
+
+## Query Expansion 配置
+
+Phase 38 起，支持中文问题跨语言关键词扩展，增强中文 query 对英文论文 chunk 的 lexical 匹配能力。
+
+### 环境变量
+
+| 变量 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| QUERY_EXPANSION_ENABLED | bool | true | 启用跨语言查询扩展 |
+| QUERY_EXPANSION_MODE | string | static | 扩展模式（当前仅 static） |
+
+### 扩展策略
+
+- 检测中文 query（Unicode `\u4e00-\u9fff`）
+- 基于静态中英学术词典，将中文术语映射为英文关键词
+- 扩展词追加到原始 query 后，用于 lexical scoring
+- LLM answer 仍使用用户原始 question，不使用扩展词
+- 英文 query 默认不扩展
+- 不调用外部模型/API
+- 不记录 API Key / prompt / chunk 全文
+
+### 示例
+
+中文问题 `"这篇论文的核心贡献是什么"` 扩展后：
+- `expanded_query_terms`: `["core", "contribution", "main contribution"]`
+- `query_expansion_applied`: `true`
+- 扩展词用于 lexical scoring，用户原始问题不变

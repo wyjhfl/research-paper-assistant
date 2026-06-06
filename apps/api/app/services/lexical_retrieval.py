@@ -197,3 +197,28 @@ def determine_retrieval_mode(
     if lexical_score > 0:
         return "lexical"
     return "vector"
+
+
+def compute_lexical_score_with_expansion(
+    query: str,
+    chunk_text: str,
+    title: str = "",
+) -> tuple[LexicalScoreResult, "QueryExpansionResult"]:
+    """Compute lexical score with query expansion support.
+
+    If the query contains Chinese characters, expands with English terms
+    and uses the expanded query for lexical scoring.
+
+    Returns (lexical_score_result, expansion_result).
+    """
+    from .query_expansion import expand_query, QueryExpansionResult
+
+    expansion = expand_query(query)
+
+    if expansion.applied:
+        # Use expanded query for scoring (includes English equivalents)
+        lex_result = compute_lexical_score(expansion.expanded_query, chunk_text, title)
+    else:
+        lex_result = compute_lexical_score(query, chunk_text, title)
+
+    return lex_result, expansion

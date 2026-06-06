@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy import text
 
+from app.services.query_expansion import QueryExpansionResult
+
 from app.main import app
 from app.models import ModelCallEvent, Paper, PaperChunk
 from app.services.model_call_audit_service import (
@@ -472,7 +474,7 @@ async def test_single_ask_produces_no_duplicate_embedding_query_audit():
             svc.repo.get_embedding_count = AsyncMock(return_value=5)
 
             mock_retrieved = [MagicMock(score=0.9, text_excerpt="test excerpt", lexical_score=0.5, retrieval_mode="lexical")]
-            svc._retrieve = AsyncMock(return_value=mock_retrieved)
+            svc._retrieve = AsyncMock(return_value=(mock_retrieved, QueryExpansionResult(original_query="", expanded_query="", applied=False, reason="")))
 
             result = await svc.ask(paper_id=1, question="test question")
         finally:
