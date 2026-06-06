@@ -60,6 +60,19 @@ class TestCIWorkflowStructure:
         ci = _load_ci()
         assert "backend-integration" in ci["jobs"], "backend-integration job missing"
 
+    def test_actions_use_node24_compatible_versions(self):
+        content = CI_YML.read_text(encoding="utf-8")
+        deprecated = [
+            "actions/checkout@v4",
+            "actions/setup-python@v5",
+            "actions/setup-node@v4",
+        ]
+        for action in deprecated:
+            assert action not in content, f"CI must not use deprecated Node 20 action: {action}"
+        assert "actions/checkout@v6" in content
+        assert "actions/setup-python@v6" in content
+        assert "actions/setup-node@v6" in content
+
 
 class TestFrontendE2E:
     def test_playwright_install_step(self):

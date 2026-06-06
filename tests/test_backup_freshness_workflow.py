@@ -20,6 +20,17 @@ class TestBackupFreshnessWorkflowExists:
     def test_workflow_file_exists(self):
         assert BF_YML.exists(), ".github/workflows/backup-freshness.yml not found"
 
+    def test_actions_use_node24_compatible_versions(self):
+        content = BF_YML.read_text(encoding="utf-8")
+        deprecated = [
+            "actions/checkout@v4",
+            "actions/setup-python@v5",
+        ]
+        for action in deprecated:
+            assert action not in content, f"backup-freshness must not use deprecated Node 20 action: {action}"
+        assert "actions/checkout@v6" in content
+        assert "actions/setup-python@v6" in content
+
 
 class TestBackupFreshnessTriggers:
     def test_has_workflow_dispatch(self):

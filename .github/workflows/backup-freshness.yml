@@ -34,10 +34,10 @@ jobs:
           echo "Do NOT interpret a failure on a hosted runner as a production backup issue."
           echo "Schedule runs require BACKUP_FRESHNESS_ENABLED=true repository variable."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
