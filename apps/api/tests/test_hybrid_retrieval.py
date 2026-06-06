@@ -13,6 +13,7 @@ from app.services.lexical_retrieval import (
     LexicalScoreResult,
 )
 from app.services.rag_service import RAGService, AnswerResult, RetrievedChunk
+import app.services.rag_service as rag_service_module
 from app.services.multi_paper_rag_service import (
     MultiPaperRAGService, MultiPaperAnswerResult, MultiPaperRetrievedChunk,
 )
@@ -187,6 +188,175 @@ class TestRetrievalMode:
 # ============================================================
 
 class TestRAGServiceHybridRetrieval:
+    @pytest.mark.asyncio
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    async def test_local_embedding_expands_single_paper_candidate_limit(self, mock_settings, mock_local):
+        """Local embedding expands SQL candidates but returns only RAG_TOP_K results."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_TOP_K = 2
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 4
+        mock_settings.RAG_MAX_CANDIDATES = 10
+        mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+        mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+        mock_settings.QUERY_EXPANSION_ENABLED = False
+        mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        rows = [
+            MagicMock(id=1, chunk_index=0, page_start=1, page_end=1, text="alpha beta", score=0.1),
+            MagicMock(id=2, chunk_index=1, page_start=1, page_end=1, text="alpha gamma", score=0.2),
+            MagicMock(id=3, chunk_index=2, page_start=1, page_end=1, text="weather", score=0.9),
+        ]
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = rows
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = RAGService(mock_session, user_id="test_user")
+        retrieved, _ = await service._retrieve(1, [0.1] * 384, "alpha", "Test Paper")
+
+        params = mock_session.execute.call_args.args[1]
+        assert params["limit"] == 8
+        assert params["user_id"] == "test_user"
+        assert len(retrieved) == 2
+        assert all(r.lexical_score > 0 for r in retrieved)
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    async def test_expanded_pool_recalls_lexical_match_outside_original_top_k(self, mock_settings, mock_local):
+        """A lexical hit outside original topK enters final results after expanded rerank."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_TOP_K = 2
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 3
+        mock_settings.RAG_MAX_CANDIDATES = 10
+        mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+        mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+        mock_settings.QUERY_EXPANSION_ENABLED = False
+        mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        rows = [
+            MagicMock(id=1, chunk_index=0, page_start=1, page_end=1, text="weather climate data", score=0.9),
+            MagicMock(id=2, chunk_index=1, page_start=1, page_end=1, text="finance market data", score=0.8),
+            MagicMock(id=3, chunk_index=2, page_start=1, page_end=1, text="deep learning optimization method", score=0.01),
+        ]
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = rows
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = RAGService(mock_session, user_id="test_user")
+        retrieved, _ = await service._retrieve(
+            1, [0.1] * 384, "deep learning optimization", "Deep Learning Paper",
+        )
+
+        assert len(retrieved) == 2
+        assert retrieved[0].chunk_id == 3
+        assert retrieved[0].lexical_score > 0
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    async def test_chinese_query_expansion_recalls_english_candidate_outside_original_top_k(self, mock_settings, mock_local):
+        """Expanded Chinese query can pull an English lexical match from the wider pool."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_TOP_K = 2
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 3
+        mock_settings.RAG_MAX_CANDIDATES = 10
+        mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+        mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+        mock_settings.QUERY_EXPANSION_ENABLED = True
+        mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        rows = [
+            MagicMock(id=1, chunk_index=0, page_start=1, page_end=1, text="weather climate data", score=0.9),
+            MagicMock(id=2, chunk_index=1, page_start=1, page_end=1, text="finance market data", score=0.8),
+            MagicMock(id=3, chunk_index=2, page_start=1, page_end=1, text="The main contribution is a new attention method.", score=0.01),
+        ]
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = rows
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = RAGService(mock_session, user_id="test_user")
+        retrieved, expansion = await service._retrieve(
+            1, [0.1] * 384, "这篇论文的核心贡献是什么？", "Attention Paper",
+        )
+
+        assert expansion.applied is True
+        assert retrieved[0].chunk_id == 3
+        assert retrieved[0].lexical_score > 0
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    async def test_local_embedding_with_lexical_disabled_keeps_base_limit(self, mock_settings, mock_local):
+        """Local embedding does not expand candidates when lexical retrieval is disabled."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = False
+        mock_settings.RAG_TOP_K = 3
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 4
+        mock_settings.RAG_MAX_CANDIDATES = 50
+        mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+        mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+        mock_settings.QUERY_EXPANSION_ENABLED = True
+        mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = RAGService(mock_session, user_id="test_user")
+        await service._retrieve(1, [0.1] * 384, "alpha", "Test Paper")
+
+        params = mock_session.execute.call_args.args[1]
+        assert params["limit"] == 3
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=False)
+    @patch("app.services.rag_service.settings")
+    async def test_real_embedding_keeps_single_paper_base_limit(self, mock_settings, mock_real):
+        """Real embedding path keeps RAG_TOP_K candidate limit."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_TOP_K = 3
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 4
+        mock_settings.RAG_MAX_CANDIDATES = 50
+        mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+        mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+        mock_settings.QUERY_EXPANSION_ENABLED = False
+        mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = RAGService(mock_session, user_id="test_user")
+        await service._retrieve(1, [0.1] * 384, "alpha", "Test Paper")
+
+        params = mock_session.execute.call_args.args[1]
+        assert params["limit"] == 3
+
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    def test_candidate_limit_never_below_base(self, mock_settings, mock_local):
+        """Multiplier/max guardrails never reduce the base SQL limit."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 0
+        mock_settings.RAG_MAX_CANDIDATES = 2
+
+        assert rag_service_module.candidate_limit_for_retrieval(5) == 5
+
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    def test_candidate_limit_respects_max_candidates(self, mock_settings, mock_local):
+        """Expanded candidate limit is bounded by RAG_MAX_CANDIDATES."""
+        mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+        mock_settings.RAG_CANDIDATE_MULTIPLIER = 10
+        mock_settings.RAG_MAX_CANDIDATES = 12
+
+        assert rag_service_module.candidate_limit_for_retrieval(5) == 12
+
     @pytest.mark.asyncio
     @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
     @patch("app.services.rag_service.settings")
@@ -367,6 +537,76 @@ class TestRAGServiceHybridRetrieval:
 # ============================================================
 
 class TestMultiPaperRAGHybridRetrieval:
+    @pytest.mark.asyncio
+    @patch("app.services.multi_paper_rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=True)
+    @patch("app.services.rag_service.settings")
+    @patch("app.services.multi_paper_rag_service.settings")
+    async def test_local_embedding_expands_multi_paper_candidate_limit(
+        self, mock_multi_settings, mock_rag_settings, mock_rag_local, mock_multi_local,
+    ):
+        """Multi-paper local retrieval expands candidates but still returns top_k."""
+        for mock_settings in (mock_multi_settings, mock_rag_settings):
+            mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+            mock_settings.RAG_CANDIDATE_MULTIPLIER = 3
+            mock_settings.RAG_MAX_CANDIDATES = 20
+            mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+            mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+            mock_settings.QUERY_EXPANSION_ENABLED = False
+            mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        rows = [
+            MagicMock(id=1, chunk_index=0, page_start=1, page_end=1, text="alpha match", paper_id=1, paper_title="P1", score=0.1),
+            MagicMock(id=2, chunk_index=0, page_start=1, page_end=1, text="alpha match", paper_id=2, paper_title="P2", score=0.2),
+            MagicMock(id=3, chunk_index=1, page_start=1, page_end=1, text="alpha match", paper_id=3, paper_title="P3", score=0.3),
+        ]
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = rows
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = MultiPaperRAGService(mock_session, user_id="test_user")
+        retrieved, _ = await service._retrieve_multi(
+            [0.1] * 384, [1, 2, 3], top_k=2, per_paper_limit=2, question="alpha",
+        )
+
+        params = mock_session.execute.call_args.args[1]
+        assert params["candidate_limit"] == 18
+        assert params["pids"] == (1, 2, 3)
+        assert params["user_id"] == "test_user"
+        assert len(retrieved) == 2
+
+    @pytest.mark.asyncio
+    @patch("app.services.multi_paper_rag_service.is_local_embedding_provider", return_value=False)
+    @patch("app.services.rag_service.is_local_embedding_provider", return_value=False)
+    @patch("app.services.rag_service.settings")
+    @patch("app.services.multi_paper_rag_service.settings")
+    async def test_real_embedding_keeps_multi_paper_base_limit(
+        self, mock_multi_settings, mock_rag_settings, mock_rag_real, mock_multi_real,
+    ):
+        """Multi-paper real embedding keeps top_k * paper_count candidate limit."""
+        for mock_settings in (mock_multi_settings, mock_rag_settings):
+            mock_settings.LEXICAL_RETRIEVAL_ENABLED = True
+            mock_settings.RAG_CANDIDATE_MULTIPLIER = 4
+            mock_settings.RAG_MAX_CANDIDATES = 50
+            mock_settings.HYBRID_VECTOR_WEIGHT = 0.7
+            mock_settings.HYBRID_LEXICAL_WEIGHT = 0.3
+            mock_settings.QUERY_EXPANSION_ENABLED = False
+            mock_settings.QUERY_EXPANSION_MODE = "static"
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+
+        service = MultiPaperRAGService(mock_session, user_id="test_user")
+        await service._retrieve_multi(
+            [0.1] * 384, [1, 2, 3], top_k=2, per_paper_limit=2, question="alpha",
+        )
+
+        params = mock_session.execute.call_args.args[1]
+        assert params["candidate_limit"] == 6
+
     @pytest.mark.asyncio
     @patch("app.services.multi_paper_rag_service.is_local_embedding_provider", return_value=True)
     @patch("app.services.multi_paper_rag_service.settings")

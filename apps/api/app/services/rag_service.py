@@ -24,6 +24,22 @@ from .model_call_audit_service import record_model_call
 logger = logging.getLogger(__name__)
 
 
+def candidate_limit_for_retrieval(base_limit: int) -> int:
+    """Return SQL candidate pool size for retrieval before final rerank.
+
+    Local hash embeddings are weak semantic rankers, so lexical reranking needs
+    a wider candidate pool. Real embedding providers keep the original limit.
+    The returned limit never goes below ``base_limit``.
+    """
+    safe_base = max(1, int(base_limit))
+    if not (is_local_embedding_provider() and settings.LEXICAL_RETRIEVAL_ENABLED):
+        return safe_base
+
+    multiplier = max(1, int(settings.RAG_CANDIDATE_MULTIPLIER))
+    max_candidates = max(safe_base, int(settings.RAG_MAX_CANDIDATES))
+    return max(safe_base, min(safe_base * multiplier, max_candidates))
+
+
 @dataclass
 class RetrievedChunk:
     chunk_id: int
@@ -338,19 +354,24 @@ class RAGService:
     ) -> tuple[list[RetrievedChunk], QueryExpansionResult]:
         emb_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
         sql = text("""
-            SELECT id, chunk_index, page_start, page_end, text,
-                   1 - (embedding <=> :query_vec) AS score
-            FROM paper_chunks
-            WHERE paper_id = :paper_id AND embedding IS NOT NULL
-            ORDER BY embedding <=> :query_vec
+            SELECT pc.id, pc.chunk_index, pc.page_start, pc.page_end, pc.text,
+                   1 - (pc.embedding <=> :query_vec) AS score
+            FROM paper_chunks pc
+            JOIN papers p ON p.id = pc.paper_id
+            WHERE pc.paper_id = :paper_id
+              AND p.user_id = :user_id
+              AND pc.embedding IS NOT NULL
+            ORDER BY pc.embedding <=> :query_vec
             LIMIT :limit
         """)
+        candidate_limit = candidate_limit_for_retrieval(settings.RAG_TOP_K)
         result = await self.session.execute(
             sql,
             {
                 "query_vec": emb_str,
                 "paper_id": paper_id,
-                "limit": settings.RAG_TOP_K,
+                "user_id": self.user_id,
+                "limit": candidate_limit,
             },
         )
         rows = result.fetchall()
@@ -405,9 +426,9 @@ class RAGService:
                 )
             )
 
-        # Re-sort by final hybrid score
+        # Re-sort by final hybrid score, then keep public response size stable.
         retrieved.sort(key=lambda r: r.score, reverse=True)
-        return retrieved, expansion_result
+        return retrieved[: settings.RAG_TOP_K], expansion_result
 
 
 class PaperNotFoundError(Exception):

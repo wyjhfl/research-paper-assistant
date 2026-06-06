@@ -1327,7 +1327,7 @@ ModelCallEventItem 字段：
 
 ## Hybrid Retrieval 配置
 
-Phase 34 起，RAG 检索支持 hybrid 模式，在 local embedding 场景下通过关键词匹配提供可用的 strict RAG。
+Phase 34 起，RAG 检索支持 hybrid 模式，在 local embedding 场景下通过关键词匹配提供可用的 strict RAG。Phase 39 起，local embedding 会先扩大候选池再做 lexical rerank，以降低 hash 向量漏召关键词 chunk 的概率。
 
 ### 环境变量
 
@@ -1335,13 +1335,16 @@ Phase 34 起，RAG 检索支持 hybrid 模式，在 local embedding 场景下通
 |------|------|------|------|
 | LEXICAL_RETRIEVAL_ENABLED | bool | true | 启用关键词检索 |
 | LEXICAL_SCORE_THRESHOLD | float | 0.15 | 关键词匹配分数阈值（local embedding 下替代 RAG_SCORE_THRESHOLD） |
+| RAG_CANDIDATE_MULTIPLIER | int | 4 | local embedding 下扩大 SQL 候选池后再做 lexical rerank |
+| RAG_MAX_CANDIDATES | int | 50 | local embedding 下候选池最大上限，最终返回数量仍由 RAG_TOP_K / top_k 控制 |
 | HYBRID_VECTOR_WEIGHT | float | 0.7 | 真实 embedding 下向量分数权重 |
 | HYBRID_LEXICAL_WEIGHT | float | 0.3 | 真实 embedding 下关键词分数权重 |
 
 ### 检索策略
 
-- **local embedding**（`EMBEDDING_PROVIDER=local`）：关键词分数作为主排序信号（0.9 * lexical + 0.1 * vector），evidence gate 使用 `LEXICAL_SCORE_THRESHOLD`
-- **真实 embedding**：混合排序（`HYBRID_VECTOR_WEIGHT * vector + HYBRID_LEXICAL_WEIGHT * lexical`），evidence gate 使用 `RAG_SCORE_THRESHOLD` + `RAG_EVIDENCE_THRESHOLD`
+- **local embedding**（EMBEDDING_PROVIDER=local）：先按 pgvector 取扩大的候选池（RAG_TOP_K * RAG_CANDIDATE_MULTIPLIER，不超过 RAG_MAX_CANDIDATES），再用关键词分数作为主排序信号（0.9 * lexical + 0.1 * vector），evidence gate 使用 LEXICAL_SCORE_THRESHOLD
+- **真实 embedding**：保持原始候选规模，混合排序（HYBRID_VECTOR_WEIGHT * vector + HYBRID_LEXICAL_WEIGHT * lexical），evidence gate 使用 RAG_SCORE_THRESHOLD + RAG_EVIDENCE_THRESHOLD
+- 最终返回 source 数量保持不变：单论文由 RAG_TOP_K 控制，跨论文由请求 	op_k / per_paper_limit 控制
 - 关键词匹配不依赖外部 API，基于 token overlap + query recall + phrase bonus + title bonus
 - 不破坏已有真实 embedding 路径
 

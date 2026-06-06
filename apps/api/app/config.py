@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 5
     RAG_SCORE_THRESHOLD: float = 0.1
     RAG_EVIDENCE_THRESHOLD: float = 0.2
+    RAG_CANDIDATE_MULTIPLIER: int = 4
+    RAG_MAX_CANDIDATES: int = 50
 
     LEXICAL_RETRIEVAL_ENABLED: bool = True
     LEXICAL_SCORE_THRESHOLD: float = 0.15

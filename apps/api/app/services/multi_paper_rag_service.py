@@ -19,6 +19,7 @@ from .lexical_retrieval import (
     is_local_embedding_provider,
 )
 from .query_expansion import QueryExpansionResult, should_expand_query
+from .rag_service import candidate_limit_for_retrieval
 from .model_call_audit_service import record_model_call
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,8 @@ class MultiPaperRAGService:
 
         emb_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
 
-        candidate_limit = top_k * len(paper_ids)
+        base_candidate_limit = top_k * len(paper_ids)
+        candidate_limit = candidate_limit_for_retrieval(base_candidate_limit)
 
         sql = text("""
             SELECT pc.id, pc.chunk_index, pc.page_start, pc.page_end, pc.text,
@@ -95,6 +97,7 @@ class MultiPaperRAGService:
             FROM paper_chunks pc
             JOIN papers p ON p.id = pc.paper_id
             WHERE pc.paper_id IN :pids
+              AND p.user_id = :user_id
               AND pc.embedding IS NOT NULL
             ORDER BY pc.embedding <=> :query_vec
             LIMIT :candidate_limit
@@ -107,6 +110,7 @@ class MultiPaperRAGService:
             {
                 "query_vec": emb_str,
                 "pids": tuple(paper_ids),
+                "user_id": self.user_id,
                 "candidate_limit": candidate_limit,
             },
         )
