@@ -56,10 +56,29 @@ docker compose up --build
 - 前端：http://localhost:3000
 - 后端：http://localhost:8091
 - 健康检查：http://localhost:8091/health
+- 就绪检查：http://localhost:8091/health/ready
+
+### 个人本地落地检查
+
+服务启动后，运行只读检查脚本确认当前环境可用于个人本地使用：
+
+```bash
+python scripts/personal_local_check.py
+```
+
+该脚本只做状态检查，不读取或输出 `.env` 内容，不执行 `eval_real_model.py`，不执行 backup/restore/cleanup `--confirm`。检查范围包括：Git 安全状态、Docker 服务、`/health`、`/health/ready`、`smoke_check.py`、`model_smoke_check.py`、文档密钥扫描和前端乱码扫描。
+
+如果只想做基础检查、避免真实 LLM 连通性调用，可执行：
+
+```bash
+python scripts/personal_local_check.py --skip-model-smoke
+```
+
+更多个人本地启动、RAG smoke 和排障步骤见 [LOCAL_DOCKER_RUNBOOK.md](docs/LOCAL_DOCKER_RUNBOOK.md)。
 
 > **Windows 用户注意**：Hyper-V 可能保留端口 7991-8090 及更大范围，导致 Docker 无法绑定 8000 端口。当前后端映射为 `8091:8000`。如遇端口冲突，运行 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看排除范围，并修改 `docker-compose.yml` 中的端口映射。
 
-> 如果本地旧 volume schema 异常，可执行 `docker compose down -v` 重建。
+> 如果本地旧 volume schema 异常，可执行 `docker compose down -v` 重建。该操作会删除本地数据库 volume，仅在确认不需要保留本地数据时执行。
 
 ### 本地开发
 
@@ -160,6 +179,12 @@ cd apps/web && npm run build
 | RAG_TOP_K | 5 | RAG 检索返回的 top-k chunk 数 |
 | RAG_SCORE_THRESHOLD | 0.1 | RAG 最低相关性分数阈值 |
 | RAG_EVIDENCE_THRESHOLD | 0.2 | RAG evidence gate 最低词汇重叠率阈值 |
+| RAG_CANDIDATE_MULTIPLIER | 4 | local embedding 下扩大候选池后再做 lexical rerank |
+| RAG_MAX_CANDIDATES | 50 | local embedding 下候选池最大上限，最终返回数量仍由 RAG_TOP_K / top_k 控制 |
+| LEXICAL_RETRIEVAL_ENABLED | true | 启用关键词检索，local embedding 下作为主排序信号 |
+| LEXICAL_SCORE_THRESHOLD | 0.15 | 关键词匹配分数阈值 |
+| QUERY_EXPANSION_ENABLED | true | 启用中文问题英文关键词扩展 |
+| QUERY_EXPANSION_MODE | static | 查询扩展模式，当前为静态词典 |
 | CORS_ALLOWED_ORIGINS | http://localhost:3000,http://localhost:3001 | 允许的跨域来源（逗号分隔）；**生产必须使用 HTTPS 域名，不得含 localhost/127.0.0.1** |
 | AUTH_ENABLED | false | `true` 启用真实认证，`false` 使用开发模式（X-User-Id header） |
 | ALLOW_DEV_USER_HEADER | true | 是否允许 X-User-Id 请求头；**生产必须设为 `false`** |
