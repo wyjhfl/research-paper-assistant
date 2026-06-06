@@ -22,7 +22,12 @@ def _get_project_root() -> Path:
         if current.parent == current:
             break
         current = current.parent
-    return Path(__file__).resolve().parent.parent.parent.parent
+    fallback = Path(__file__).resolve().parent.parent.parent.parent
+    if (fallback / "docker-compose.yml").exists() or (fallback / ".env.example").exists():
+        return fallback
+    if Path("/.dockerenv").exists() and sys.platform != "win32":
+        pytest.skip("project root not accessible in backend container")
+    return fallback
 
 
 def test_manifest_valid_ok():
@@ -410,11 +415,12 @@ def test_rc_gate_prod_check_throws_on_nonzero():
         pytest.skip("project root not accessible in container")
     rc_gate = project_root / "scripts" / "rc_gate.ps1"
     content = rc_gate.read_text(encoding="utf-8")
-    prod_check_block_start = content.find('"Production check"')
+    prod_check_block_start = content.find("Production check")
     assert prod_check_block_start > 0
-    prod_check_block = content[prod_check_block_start:prod_check_block_start + 300]
-    assert "LASTEXITCODE -ne 0" in prod_check_block
-    assert "throw" in prod_check_block
+    prod_check_block = content[prod_check_block_start:prod_check_block_start + 500]
+    assert "Invoke-SafeCommand" in prod_check_block
+    assert "production_check.py" in prod_check_block
+    assert "Production check failed" in prod_check_block
 
 
 @pytest.mark.skipif(not Path("/.dockerenv").exists() and sys.platform != "win32", reason="RC gate/docs tests require project root access")

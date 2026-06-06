@@ -126,6 +126,11 @@ function Invoke-SafeCommand {
 $projectRoot = (Get-Item (Join-Path $PSScriptRoot "..")).FullName
 Set-Location $projectRoot
 
+if ($ManifestPath -and [System.IO.Path]::IsPathRooted($ManifestPath)) {
+    Write-Host "ERROR: ManifestPath must be project-relative" -ForegroundColor Red
+    exit 1
+}
+
 $Python = Resolve-PythonCommand
 
 $step = 0
