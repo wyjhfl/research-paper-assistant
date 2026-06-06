@@ -105,6 +105,8 @@ test.describe("/papers/[id] detail UX", () => {
     await main.locator('button:has-text("提问")').click();
     await expect(main.locator('a:has-text("定位片段")')).toBeVisible();
     await expect(main).toContainText("关键词: 80.0%");
+    await expect(main.locator('button:has-text("复制回答")')).toBeVisible();
+    await expect(main).toContainText("继续追问");
   });
 });
 
@@ -144,6 +146,60 @@ test.describe("/papers/ask", () => {
 
     await main.locator('button:has-text("全选已完成")').click();
     await expect(main).toContainText("已选择 2 篇论文");
+  });
+
+  test("回答后显示复制和继续追问", async ({ page }) => {
+    await page.route("**/papers", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          papers: [
+            { id: 1, title: "Paper Alpha", filename: "a.pdf", status: "completed", chunk_count: 2, created_at: "2026-01-01T00:00:00Z" },
+          ],
+          total: 1,
+        }),
+      });
+    });
+    await page.route("**/papers/ask", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          answer: "These papers share a retrieval workflow.",
+          status: "answered",
+          confidence: 0.65,
+          evidence_gate_reason: "",
+          retrieved_source_count: 1,
+          top_source_score: 0.65,
+          sources: [
+            {
+              paper_id: 1,
+              paper_title: "Paper Alpha",
+              chunk_id: 10,
+              chunk_index: 0,
+              page_start: 1,
+              page_end: 1,
+              text_excerpt: "retrieval workflow",
+              score: 0.65,
+              vector_score: 0.2,
+              lexical_score: 0.75,
+              retrieval_mode: "hybrid",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("/papers/ask");
+    const main = getAppMain(page);
+    await main.locator('button:has-text("共同主题")').click();
+    await main.locator('button:has-text("提问")').click();
+    await expect(main.locator('button:has-text("复制回答")')).toBeVisible();
+    await expect(main).toContainText("继续追问");
+    await expect(main.locator('a:has-text("定位片段")')).toBeVisible();
+    await expect(main).toContainText("关键词: 75.0%");
   });
 
   test("loading 态：延迟响应时显示'正在加载论文列表'，不显示空状态", async ({ page }) => {

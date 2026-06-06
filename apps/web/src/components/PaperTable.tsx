@@ -37,6 +37,9 @@ export default function PaperTable({ papers }: PaperTableProps) {
           <p className="mt-1 text-lg font-semibold text-blue-700">{totalChunks}</p>
         </div>
       </div>
+      <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+        提示：点击“查看详情”进入单论文问答；进入“跨论文问答”可以全库检索或选择指定论文。
+      </div>
       <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

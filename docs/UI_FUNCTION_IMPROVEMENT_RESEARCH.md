@@ -49,10 +49,15 @@ The strongest patterns from comparable research assistants are:
 - Added cross-paper "select all completed" action.
 - Added source jump links from answer citations to paper chunks.
 - Exposed lexical and vector scores in citation metadata.
+- Added follow-up question chips after successful answers.
+- Changed copy behavior to copy the answer plus compact source metadata.
 - Added Idea extraction controls for LLM fallback and max idea count.
 - Added no-result reason and suggestions display for Idea extraction.
 - Added paper library summary cards: total, completed, failed, chunk count.
+- Added a paper library usage hint for the most common next actions.
 - Kept paper chunks open with a bounded scroll area for faster source checking.
+- Reworked paper detail rendering to avoid a local streaming skeleton stall and
+  make client-side source inspection more reliable.
 - Expanded frontend mojibake scan coverage to the edited components.
 
 ## Recommended next roadmap
@@ -93,9 +98,11 @@ sources.
 
 Validation:
 
-- Suggestions are short and clickable.
-- Clicking a suggestion fills the question box.
-- No extra model call is made unless the user submits.
+- Suggestions are short and clickable. **Landed in lightweight form.**
+- Clicking a suggestion fills the question box. **Landed in lightweight form.**
+- No extra model call is made unless the user submits. **Landed in lightweight form.**
+- Future improvement: generate context-specific follow-ups from the returned
+  source set instead of using fixed presets.
 
 ### P2: Saved notes
 
