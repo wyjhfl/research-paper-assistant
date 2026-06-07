@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -79,6 +80,26 @@ async def test_paper_search_has_request_body_schema():
 
 
 @pytest.mark.asyncio
+async def test_review_matrix_has_request_and_response_schema():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/openapi.json")
+    spec = resp.json()
+    path = spec["paths"]["/papers/review-matrix"]["post"]
+    assert "requestBody" in path
+    request_schema = _resolve_schema(path["requestBody"]["content"]["application/json"]["schema"], spec)
+    request_props = request_schema.get("properties", {})
+    assert "paper_ids" in request_props
+    assert "max_chunks_per_paper" in request_props
+
+    response_schema = _success_response_schema(spec, "/papers/review-matrix", "post")
+    response_props = response_schema.get("properties", {})
+    assert "rows" in response_props
+    assert "total_papers" in response_props
+    assert "generated_by" in response_props
+
+
+@pytest.mark.asyncio
 async def test_ask_responses_include_query_expansion_fields():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -129,6 +150,7 @@ async def test_main_endpoints_have_response_schema():
         ("/papers/{paper_id}/ideas/extract", "post"),
         ("/papers/ask", "post"),
         ("/papers/search", "post"),
+        ("/papers/review-matrix", "post"),
         ("/ideas", "post"),
         ("/ideas", "get"),
         ("/ideas/{idea_id}", "get"),
@@ -282,6 +304,60 @@ async def test_paper_search_passes_top_k_to_service():
         mock_instance.search.assert_called_once()
         call_kwargs = mock_instance.search.call_args
         assert call_kwargs.kwargs.get("top_k") == 7 or (len(call_kwargs.args) >= 3 and call_kwargs.args[2] == 7) or call_kwargs.kwargs.get("top_k") == 7
+
+
+@pytest.mark.asyncio
+async def test_review_matrix_endpoint_returns_rows_without_model_call():
+    mock_result = SimpleNamespace(
+        rows=[
+            SimpleNamespace(
+                paper_id=1,
+                paper_title="Alpha Paper",
+                problem="The paper studies a retrieval problem.",
+                method="It proposes a workflow.",
+                evidence="Experiments evaluate the workflow.",
+                metric="Accuracy is reported.",
+                limitation="Limitations remain.",
+                future_work="Future work improves retrieval.",
+                source_chunk_ids=[10],
+                sources=[
+                    SimpleNamespace(
+                        paper_id=1,
+                        paper_title="Alpha Paper",
+                        chunk_id=10,
+                        chunk_index=0,
+                        page_start=1,
+                        page_end=1,
+                        text_excerpt="This paper studies a retrieval problem.",
+                        matched_fields=["problem", "method"],
+                    )
+                ],
+            )
+        ],
+        total_papers=1,
+        generated_by="heuristic",
+        warnings=[],
+    )
+
+    with patch("app.routers.papers.ReviewMatrixService") as MockService:
+        mock_instance = MockService.return_value
+        mock_instance.generate = AsyncMock(return_value=mock_result)
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/papers/review-matrix",
+                json={"paper_ids": [1], "max_chunks_per_paper": 8},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["generated_by"] == "heuristic"
+        assert data["total_papers"] == 1
+        assert data["rows"][0]["paper_title"] == "Alpha Paper"
+        assert data["rows"][0]["source_chunk_ids"] == [10]
+        assert data["rows"][0]["sources"][0]["matched_fields"] == ["problem", "method"]
+        mock_instance.generate.assert_awaited_once_with(paper_ids=[1], max_chunks_per_paper=8)
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { label: "首页", href: "/" },
   { label: "论文库", href: "/papers" },
   { label: "跨论文问答", href: "/papers/ask" },
+  { label: "综述表", href: "/papers/review" },
   { label: "Idea", href: "/ideas" },
   { label: "Agent", href: "/agent" },
   { label: "MCP", href: "/mcp" },

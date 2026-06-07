@@ -54,6 +54,9 @@ The strongest patterns from comparable research assistants are:
 - Added expandable/copyable source cards for single-paper and cross-paper QA.
 - Added hash-target chunk highlighting on the paper detail page so citation
   jumps make the active chunk visible and expanded.
+- Added a structured literature review matrix page for selected completed
+  papers: problem, method, evidence, metric/result, limitation, future work,
+  and source chunk links.
 - Added follow-up question chips after successful answers.
 - Changed copy behavior to copy the answer plus compact source metadata.
 - Added Idea extraction controls for LLM fallback and max idea count.
@@ -95,6 +98,11 @@ Validation:
 - Generated table never includes secrets.
 - Every row includes at least one source chunk id.
 - UI can copy/export the table.
+
+Status: **Landed in heuristic form.** `/papers/review` generates a review
+matrix without calling the model, links each row back to source chunks, and can
+copy the result as Markdown. Future improvement: optional LLM-assisted synthesis
+with strict source grounding.
 
 ### P2: Follow-up questions
 

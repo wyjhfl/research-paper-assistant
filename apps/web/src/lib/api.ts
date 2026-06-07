@@ -532,6 +532,37 @@ export interface PaperSearchResponse {
   results: MultiPaperSourceItem[];
 }
 
+export interface ReviewMatrixSourceItem {
+  paper_id: number;
+  paper_title: string;
+  chunk_id: number;
+  chunk_index: number;
+  page_start: number;
+  page_end: number;
+  text_excerpt: string;
+  matched_fields: string[];
+}
+
+export interface ReviewMatrixRow {
+  paper_id: number;
+  paper_title: string;
+  problem: string;
+  method: string;
+  evidence: string;
+  metric: string;
+  limitation: string;
+  future_work: string;
+  source_chunk_ids: number[];
+  sources: ReviewMatrixSourceItem[];
+}
+
+export interface ReviewMatrixResponse {
+  rows: ReviewMatrixRow[];
+  total_papers: number;
+  generated_by: string;
+  warnings: string[];
+}
+
 export async function multiPaperAsk(
   question: string,
   paperIds?: number[],
@@ -558,6 +589,17 @@ export async function searchPaperChunks(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, paper_ids: paperIds || null, top_k: topK }),
+  });
+}
+
+export async function generateReviewMatrix(
+  paperIds?: number[],
+  maxChunksPerPaper: number = 8,
+): Promise<ReviewMatrixResponse> {
+  return apiFetch<ReviewMatrixResponse>("/papers/review-matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds || null, max_chunks_per_paper: maxChunksPerPaper }),
   });
 }
 

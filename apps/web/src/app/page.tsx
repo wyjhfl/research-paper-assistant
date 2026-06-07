@@ -21,6 +21,12 @@ const CAPABILITIES = [
     href: "/papers/ask",
   },
   {
+    icon: "表格",
+    title: "文献综述表",
+    description: "把论文整理成问题、方法、证据、指标、局限与未来工作矩阵",
+    href: "/papers/review",
+  },
+  {
     icon: "想法",
     title: "Idea 抽取",
     description: "从论文中提取研究想法、研究问题与方法提示",
@@ -49,6 +55,7 @@ const CAPABILITIES = [
 const QUICK_START = [
   { label: "上传论文", href: "/papers", primary: true },
   { label: "跨论文问答", href: "/papers/ask", primary: true },
+  { label: "生成综述表", href: "/papers/review", primary: false },
   { label: "运行 Agent", href: "/agent", primary: false },
 ];
 

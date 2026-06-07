@@ -11,6 +11,7 @@ from ..services.paper_service import PaperService
 from ..services.rag_service import RAGService, PaperNotFoundError, PaperNotReadyError
 from ..services.multi_paper_rag_service import MultiPaperRAGService
 from ..services.idea_service import IdeaService
+from ..services.review_matrix_service import ReviewMatrixService
 from ..services.ai_provider import ProviderConfigurationError, ProviderRequestError, ProviderResponseError
 from ..repositories.paper_repo import PaperRepository
 from ..schemas.paper import (
@@ -24,6 +25,8 @@ from ..schemas.paper import (
     MultiPaperAskResponse,
     PaperSearchRequest,
     PaperSearchResponse,
+    ReviewMatrixRequest,
+    ReviewMatrixResponse,
 )
 from ..schemas.idea import ExtractIdeasResponse, CrossPaperIdeaRequest, CrossPaperIdeaResponse
 
@@ -342,6 +345,51 @@ async def search_papers(
             }
             for r in results
         ],
+    }
+
+
+@router.post("/review-matrix", response_model=ReviewMatrixResponse)
+async def generate_review_matrix(
+    req: ReviewMatrixRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    service = ReviewMatrixService(db, user_id=user_id)
+    result = await service.generate(
+        paper_ids=req.paper_ids,
+        max_chunks_per_paper=req.max_chunks_per_paper,
+    )
+    return {
+        "rows": [
+            {
+                "paper_id": row.paper_id,
+                "paper_title": row.paper_title,
+                "problem": row.problem,
+                "method": row.method,
+                "evidence": row.evidence,
+                "metric": row.metric,
+                "limitation": row.limitation,
+                "future_work": row.future_work,
+                "source_chunk_ids": row.source_chunk_ids,
+                "sources": [
+                    {
+                        "paper_id": source.paper_id,
+                        "paper_title": source.paper_title,
+                        "chunk_id": source.chunk_id,
+                        "chunk_index": source.chunk_index,
+                        "page_start": source.page_start,
+                        "page_end": source.page_end,
+                        "text_excerpt": source.text_excerpt,
+                        "matched_fields": source.matched_fields,
+                    }
+                    for source in row.sources
+                ],
+            }
+            for row in result.rows
+        ],
+        "total_papers": result.total_papers,
+        "generated_by": result.generated_by,
+        "warnings": result.warnings or [],
     }
 
 

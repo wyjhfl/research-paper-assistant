@@ -310,6 +310,74 @@ test.describe("/papers/ask", () => {
   });
 });
 
+test.describe("/papers/review", () => {
+  test("显示文献综述表入口、选择论文并生成矩阵", async ({ page }) => {
+    await page.route("**/papers", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          papers: [
+            { id: 1, title: "Paper Alpha", filename: "a.pdf", status: "completed", chunk_count: 2, created_at: "2026-01-01T00:00:00Z" },
+            { id: 2, title: "Paper Beta", filename: "b.pdf", status: "completed", chunk_count: 3, created_at: "2026-01-02T00:00:00Z" },
+          ],
+          total: 2,
+        }),
+      });
+    });
+    await page.route("**/papers/review-matrix", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          rows: [
+            {
+              paper_id: 1,
+              paper_title: "Paper Alpha",
+              problem: "The paper studies a retrieval problem.",
+              method: "It proposes a workflow.",
+              evidence: "Experiments evaluate the workflow.",
+              metric: "Accuracy is reported.",
+              limitation: "Limitations remain.",
+              future_work: "Future work can improve retrieval.",
+              source_chunk_ids: [10],
+              sources: [
+                {
+                  paper_id: 1,
+                  paper_title: "Paper Alpha",
+                  chunk_id: 10,
+                  chunk_index: 0,
+                  page_start: 1,
+                  page_end: 1,
+                  text_excerpt: "This paper studies a retrieval problem and proposes a workflow.",
+                  matched_fields: ["problem", "method"],
+                },
+              ],
+            },
+          ],
+          total_papers: 1,
+          generated_by: "heuristic",
+          warnings: [],
+        }),
+      });
+    });
+
+    await page.goto("/papers/review");
+    const main = getAppMain(page);
+    await expect(main.locator("h1").first()).toContainText("文献综述表");
+    await expect(main).toContainText("选择论文");
+    await main.locator('button:has-text("全选已完成")').click();
+    await main.locator('button:has-text("生成综述表")').click();
+    await expect(main).toContainText("结构化综述表");
+    await expect(main).toContainText("问题");
+    await expect(main).toContainText("The paper studies a retrieval problem.");
+    await expect(main.locator('a:has-text("chunk #0")')).toBeVisible();
+    await expect(main.locator('button:has-text("复制 Markdown")')).toBeVisible();
+  });
+});
+
 test.describe("/mcp", () => {
   const REAL_TOOLS = [
     "search_papers",

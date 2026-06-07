@@ -175,3 +175,39 @@ class PaperSearchResultItem(BaseModel):
 
 class PaperSearchResponse(BaseModel):
     results: list[PaperSearchResultItem]
+
+
+class ReviewMatrixRequest(BaseModel):
+    paper_ids: list[int] | None = Field(default=None, max_length=50)
+    max_chunks_per_paper: int = Field(default=8, ge=1, le=20)
+
+
+class ReviewMatrixSourceItem(BaseModel):
+    paper_id: int
+    paper_title: str
+    chunk_id: int
+    chunk_index: int
+    page_start: int
+    page_end: int
+    text_excerpt: str
+    matched_fields: list[str] = Field(default_factory=list)
+
+
+class ReviewMatrixRow(BaseModel):
+    paper_id: int
+    paper_title: str
+    problem: str
+    method: str
+    evidence: str
+    metric: str
+    limitation: str
+    future_work: str
+    source_chunk_ids: list[int]
+    sources: list[ReviewMatrixSourceItem]
+
+
+class ReviewMatrixResponse(BaseModel):
+    rows: list[ReviewMatrixRow]
+    total_papers: int
+    generated_by: str = "heuristic"
+    warnings: list[str] = Field(default_factory=list)

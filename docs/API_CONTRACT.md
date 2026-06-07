@@ -716,6 +716,77 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 
 ---
 
+### POST /papers/review-matrix
+
+用途：把选定论文整理为结构化文献综述矩阵，便于写 related work。该接口使用启发式关键词抽取，不调用 LLM，不保存 prompt/chunk 全文。
+
+**请求体**：
+
+```json
+{
+  "paper_ids": [1, 2, 3],
+  "max_chunks_per_paper": 8
+}
+```
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| paper_ids | int[] | 否 | null | 限定论文，null 表示全部已完成论文，最多 50 个 |
+| max_chunks_per_paper | int | 否 | 8 | 每篇最多扫描 chunk 数，范围 [1, 20] |
+
+**响应** (200)：
+
+```json
+{
+  "rows": [
+    {
+      "paper_id": 1,
+      "paper_title": "Attention Is All You Need",
+      "problem": "The paper addresses sequence transduction...",
+      "method": "It proposes the Transformer architecture...",
+      "evidence": "Experiments evaluate translation quality...",
+      "metric": "BLEU score is reported...",
+      "limitation": "未在片段中发现明确的局限",
+      "future_work": "Future work can extend the architecture...",
+      "source_chunk_ids": [3, 5],
+      "sources": [
+        {
+          "paper_id": 1,
+          "paper_title": "Attention Is All You Need",
+          "chunk_id": 3,
+          "chunk_index": 2,
+          "page_start": 3,
+          "page_end": 4,
+          "text_excerpt": "...",
+          "matched_fields": ["method", "evidence"]
+        }
+      ]
+    }
+  ],
+  "total_papers": 1,
+  "generated_by": "heuristic",
+  "warnings": []
+}
+```
+
+| 响应字段 | 类型 | 说明 |
+|----------|------|------|
+| rows | array | 每篇论文一行的综述矩阵 |
+| total_papers | int | 实际生成的论文行数 |
+| generated_by | string | 当前固定为 `"heuristic"` |
+| warnings | string[] | 跳过 missing / non-completed 论文等提示 |
+
+**row 字段**：
+- `problem` / `method` / `evidence` / `metric` / `limitation` / `future_work`：从 chunk 句子中启发式抽取；未命中时返回明确的“未发现”提示。
+- `source_chunk_ids`：支撑该行字段的 chunk id 集合；若未命中但论文有 chunk，则保留首个 chunk 作为可追溯来源。
+- `sources`：来源片段摘要，包含 `matched_fields`，前端可跳转到 `/papers/{paper_id}#chunk-{chunk_id}`。
+
+**用户隔离**：只读取当前 user_id 的 completed papers；paper_ids 过滤校验归属当前 user_id。
+
+**是否依赖真实模型**：否。不调用 LLM，不调用 embedding provider。
+
+---
+
 ## Ideas
 
 ### POST /papers/{paper_id}/ideas/extract
