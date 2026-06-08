@@ -301,7 +301,7 @@ async def run_checks() -> list[CheckResult]:
 
     required_tables = [
         "papers", "paper_chunks", "ideas", "idea_sources",
-        "agent_runs", "job_runs", "model_call_events", "users", "user_sessions",
+        "research_notes", "agent_runs", "job_runs", "model_call_events", "users", "user_sessions",
     ]
     try:
         async with engine.connect() as conn:

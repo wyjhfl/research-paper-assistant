@@ -46,7 +46,15 @@ async def smoke_check():
     results.append(vector_ok)
 
     print("\n--- 3. Core Tables ---")
-    required_tables = ["papers", "paper_chunks", "ideas", "idea_sources", "agent_runs", "model_call_events"]
+    required_tables = [
+        "papers",
+        "paper_chunks",
+        "ideas",
+        "idea_sources",
+        "research_notes",
+        "agent_runs",
+        "model_call_events",
+    ]
     tables_ok = True
     try:
         async with engine.connect() as conn:

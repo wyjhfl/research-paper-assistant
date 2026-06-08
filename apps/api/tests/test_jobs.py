@@ -586,6 +586,13 @@ def test_production_check_includes_job_runs_table():
     assert '"job_runs"' in src or "'job_runs'" in src
 
 
+def test_production_check_includes_research_notes_table():
+    import inspect
+    from scripts.production_check import run_checks
+    src = inspect.getsource(run_checks)
+    assert '"research_notes"' in src or "'research_notes'" in src
+
+
 @pytest.mark.asyncio
 async def test_auth_enabled_no_session_returns_401():
     original = settings.AUTH_ENABLED

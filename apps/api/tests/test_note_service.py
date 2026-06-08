@@ -56,6 +56,14 @@ class FakePaperRepo:
         return self.chunks.get(paper_id, [])
 
 
+def test_smoke_check_includes_research_notes_table():
+    import inspect
+    from scripts import smoke_check
+
+    src = inspect.getsource(smoke_check.smoke_check)
+    assert '"research_notes"' in src or "'research_notes'" in src
+
+
 @pytest.mark.asyncio
 async def test_create_note_filters_source_and_preserves_user_id():
     service = ResearchNoteService(session=None, user_id="user_a")  # type: ignore[arg-type]
