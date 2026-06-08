@@ -28,3 +28,16 @@ def test_readme_mentions_current_rag_local_enhancements():
     assert "hybrid lexical retrieval" in content
     assert "QUERY_EXPANSION_ENABLED" in content
     assert "\u4e2d\u6587\u95ee\u9898\u82f1\u6587\u5173\u952e\u8bcd\u6269\u5c55" in content
+
+
+
+def test_readme_personal_check_prefers_non_destructive_alembic_recovery():
+    content = _readme()
+    start = content.index("### \u4e2a\u4eba\u672c\u5730\u843d\u5730\u68c0\u67e5")
+    end = content.index("### \u672c\u5730\u5f00\u53d1", start)
+    section = content[start:end]
+    assert "alembic stamp" in section
+    assert "LOCAL_DOCKER_RUNBOOK.md" in section
+    assert "docker compose down -v" in section
+    assert "\u53ea\u6709\u786e\u8ba4\u4e0d\u9700\u8981\u4fdd\u7559\u672c\u5730\u6570\u636e" in section
+    assert "\u65e7 volume schema \u5f02\u5e38\uff0c\u53ef\u6267\u884c `docker compose down -v`" not in section

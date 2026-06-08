@@ -99,7 +99,7 @@ python scripts/personal_local_check.py --run-model-smoke
 
 > **Windows 用户注意**：Hyper-V 可能保留端口 7991-8090 及更大范围，导致 Docker 无法绑定 8000 端口。当前后端映射为 `8091:8000`。如遇端口冲突，运行 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看排除范围，并修改 `docker-compose.yml` 中的端口映射。
 
-> 如果本地旧 volume schema 异常，可执行 `docker compose down -v` 重建。该操作会删除本地数据库 volume，仅在确认不需要保留本地数据时执行。
+> 如果 `/health/ready` 显示 Alembic 版本落后但表已存在，先按 [LOCAL_DOCKER_RUNBOOK.md](docs/LOCAL_DOCKER_RUNBOOK.md) 执行 `alembic current` / `alembic stamp` 的非破坏性排障。只有确认不需要保留本地数据时，才考虑 `docker compose down -v` 重建；该操作会删除本地数据库 volume。
 
 ### 本地开发
 
