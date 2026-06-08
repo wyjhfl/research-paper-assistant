@@ -59,6 +59,8 @@ The strongest patterns from comparable research assistants are:
   and source chunk links.
 - Added a research notes workbench for saving manual notes, QA answers, source
   snippets, and review matrices as local Markdown-friendly notes.
+- Added a local landing status panel on the home page to show backend/database,
+  paper library, notes, and worker readiness for personal Docker use.
 - Added follow-up question chips after successful answers.
 - Changed copy behavior to copy the answer plus compact source metadata.
 - Added Idea extraction controls for LLM fallback and max idea count.

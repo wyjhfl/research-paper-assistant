@@ -10,14 +10,58 @@ async function waitForSsrContent(page: Page, h1Text: string): Promise<Locator> {
   return main;
 }
 
+async function mockLandingStatus(page: Page, papers: unknown[] = []) {
+  await page.route("**/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", version: "1.0.1", database: "connected" }),
+    });
+  });
+  await page.route("**/jobs/worker/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        worker_enabled: true,
+        poll_interval_seconds: 1,
+        max_attempts_default: 1,
+        stale_running_seconds: 900,
+        running_count: 0,
+        pending_count: 0,
+        failed_count: 0,
+        stale_running_count: 0,
+      }),
+    });
+  });
+  await page.route("**/notes?*", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ notes: [], total: 2 }),
+    });
+  });
+  await page.route("**/papers", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ papers, total: papers.length }),
+    });
+  });
+}
+
 test.describe("首页 /", () => {
   test("h1 包含'多 Agent 科研论文助手'", async ({ page }) => {
+    await mockLandingStatus(page);
     await page.goto("/");
     const h1 = getAppMain(page).locator("h1").first();
     await expect(h1).toContainText("多 Agent 科研论文助手");
   });
 
   test("存在论文库、跨论文问答、Agent、MCP 入口", async ({ page }) => {
+    await mockLandingStatus(page);
     await page.goto("/");
     const main = getAppMain(page);
     await expect(main).toContainText("论文库");
@@ -28,11 +72,24 @@ test.describe("首页 /", () => {
   });
 
   test("页面不是空白", async ({ page }) => {
+    await mockLandingStatus(page);
     await page.goto("/");
     const main = getAppMain(page);
     await expect(main.locator("h1").first()).toContainText("多 Agent 科研论文助手");
     const text = await main.innerText();
     expect(text.trim().length).toBeGreaterThan(50);
+  });
+
+  test("显示本地落地状态面板", async ({ page }) => {
+    await mockLandingStatus(page, [
+      { id: 1, title: "Paper Alpha", filename: "a.pdf", status: "completed", chunk_count: 5, created_at: "2026-01-01T00:00:00Z" },
+    ]);
+    await page.goto("/");
+    const main = getAppMain(page);
+    await expect(main).toContainText("本地落地状态");
+    await expect(main).toContainText("总体：正常");
+    await expect(main).toContainText("1 篇已完成 / 5 个片段");
+    await expect(main).toContainText("2 条笔记");
   });
 });
 

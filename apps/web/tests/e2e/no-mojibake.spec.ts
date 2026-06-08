@@ -56,6 +56,7 @@ const SCAN_FILES = [
   "src/components/PaperQA.tsx",
   "src/components/ReviewMatrix.tsx",
   "src/components/NotesWorkbench.tsx",
+  "src/components/LocalLandingStatus.tsx",
   "src/components/PaperTable.tsx",
   "src/components/UserSwitcher.tsx",
   "src/components/UsageDashboard.tsx",

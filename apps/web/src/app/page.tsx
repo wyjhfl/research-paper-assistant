@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import LocalLandingStatus from "@/components/LocalLandingStatus";
 
 const CAPABILITIES = [
   {
@@ -73,6 +74,8 @@ export default function HomePage() {
         title="多 Agent 科研论文助手"
         description="上传 PDF、构建论文记忆、RAG 问答、Idea 抽取、Agent 引用推荐 - 一站式科研辅助平台"
       />
+
+      <LocalLandingStatus />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {CAPABILITIES.map((cap) => {

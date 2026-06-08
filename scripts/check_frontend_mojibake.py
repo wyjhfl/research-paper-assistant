@@ -55,6 +55,7 @@ SCAN_FILES = [
     "apps/web/src/components/PaperQA.tsx",
     "apps/web/src/components/ReviewMatrix.tsx",
   "apps/web/src/components/NotesWorkbench.tsx",
+  "apps/web/src/components/LocalLandingStatus.tsx",
     "apps/web/src/components/PaperTable.tsx",
     "apps/web/src/components/UserSwitcher.tsx",
     "apps/web/src/components/UsageDashboard.tsx",
