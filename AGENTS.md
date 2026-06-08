@@ -93,6 +93,10 @@ docker compose exec -T backend python scripts/smoke_check.py
 # 真实模型连通性测试
 docker compose exec -T backend python scripts/model_smoke_check.py
 
+# 个人本地工作流烟测（默认不写入研究笔记；显式 --write-note 才保存本地 smoke note）
+python scripts/personal_workflow_smoke.py
+python scripts/personal_workflow_smoke.py --write-note
+
 # 真实模型评测
 docker compose exec -T backend python scripts/eval_real_model.py
 

@@ -97,6 +97,18 @@ python scripts/personal_local_check.py
 python scripts/personal_local_check.py --run-model-smoke
 ```
 
+如需验证个人使用闭环，可运行端到端工作流烟测。默认只验证论文选择、单论文问答和综述表生成，不写入研究笔记：
+
+```bash
+python scripts/personal_workflow_smoke.py
+```
+
+需要同时验证研究笔记保存和 Markdown 渲染时，显式传入 `--write-note`。脚本只输出状态、置信度和来源数量等摘要，不输出模型回答全文：
+
+```bash
+python scripts/personal_workflow_smoke.py --write-note
+```
+
 更多个人本地启动、RAG smoke 和排障步骤见 [LOCAL_DOCKER_RUNBOOK.md](docs/LOCAL_DOCKER_RUNBOOK.md)。
 
 > **Windows 用户注意**：Hyper-V 可能保留端口 7991-8090 及更大范围，导致 Docker 无法绑定 8000 端口。当前后端映射为 `8091:8000`。如遇端口冲突，运行 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看排除范围，并修改 `docker-compose.yml` 中的端口映射。

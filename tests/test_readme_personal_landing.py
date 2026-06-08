@@ -43,3 +43,10 @@ def test_readme_personal_check_prefers_non_destructive_alembic_recovery():
     assert "docker compose down -v" in section
     assert "\u53ea\u6709\u786e\u8ba4\u4e0d\u9700\u8981\u4fdd\u7559\u672c\u5730\u6570\u636e" in section
     assert "\u65e7 volume schema \u5f02\u5e38\uff0c\u53ef\u6267\u884c `docker compose down -v`" not in section
+
+
+def test_readme_mentions_personal_workflow_smoke_script():
+    content = _readme()
+    assert "scripts/personal_workflow_smoke.py" in content
+    assert "--write-note" in content
+    assert "\u4e0d\u8f93\u51fa\u6a21\u578b\u56de\u7b54\u5168\u6587" in content
