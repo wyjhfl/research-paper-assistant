@@ -247,6 +247,45 @@ class TestPersonalLocalCheckRuntime:
         assert "notes=0" in workflow["message"]
         assert "jobs=0" in workflow["message"]
 
+    def test_main_checks_core_frontend_routes(self, monkeypatch, capsys):
+        module = load_module()
+        visited_urls: list[str] = []
+
+        def fake_run(args, timeout=60):
+            cmd = " ".join(args)
+            if "ls-files" in cmd or "status --short" in cmd:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if "docker --version" in cmd:
+                return subprocess.CompletedProcess(args, 0, "Docker version test", "")
+            if "docker compose ps" in cmd:
+                service_rows = "\n".join([
+                    '{"Service":"backend","State":"running","Health":"healthy"}',
+                    '{"Service":"frontend","State":"running","Health":""}',
+                    '{"Service":"postgres","State":"running","Health":"healthy"}',
+                ])
+                return subprocess.CompletedProcess(args, 0, service_rows, "")
+            if "smoke_check.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, "RESULT: ALL CHECKS PASSED", "")
+            return subprocess.CompletedProcess(args, 0, "PASSED", "")
+
+        def fake_http_status(url, timeout=10):
+            visited_urls.append(url)
+            return True, "status=200"
+
+        monkeypatch.setattr(module, "_run", fake_run)
+        monkeypatch.setattr(module, "_http_json", successful_http_json)
+        monkeypatch.setattr(module, "_http_status", fake_http_status)
+        monkeypatch.setattr(module, "resolve_git", lambda: "git")
+
+        assert module.main([]) == 0
+        out = json.loads(capsys.readouterr().out)
+        routes = next(c for c in out["checks"] if c["name"] == "frontend core routes")
+
+        assert routes["ok"] is True
+        for path in ["/", "/guide", "/papers", "/papers/review", "/notes"]:
+            assert f"http://localhost:3000{path}" in visited_urls
+            assert path in routes["message"]
+
     def test_personal_workflow_counts_include_next_step_when_notes_are_empty(self, monkeypatch, capsys):
         module = load_module()
 

@@ -221,6 +221,17 @@ def check_http(api_base: str, frontend_base: str) -> list[Check]:
     return checks
 
 
+def check_frontend_routes(frontend_base: str) -> list[Check]:
+    routes = ["/", "/guide", "/papers", "/papers/review", "/notes"]
+    ok_all = True
+    parts: list[str] = []
+    for route in routes:
+        ok, msg = _http_status(f"{frontend_base}{route}")
+        ok_all = ok_all and ok
+        parts.append(f"{route}={msg}" if ok else f"{route}=failed:{msg}")
+    return [Check("frontend core routes", ok_all, ", ".join(parts))]
+
+
 def check_personal_workflow(api_base: str) -> list[Check]:
     endpoint_specs = [
         ("papers", "/papers", "papers"),
@@ -328,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": False, "checks": [asdict(c) for c in checks]}, ensure_ascii=False, indent=2))
         return 1
     checks.extend(check_http(args.api_base.rstrip("/"), args.frontend_base.rstrip("/")))
+    checks.extend(check_frontend_routes(args.frontend_base.rstrip("/")))
     checks.extend(check_personal_workflow(args.api_base.rstrip("/")))
     checks.extend(check_scripts(run_model_smoke=args.run_model_smoke))
     checks.extend(check_workflow_smoke(run_workflow_smoke=args.run_workflow_smoke, write_smoke_note=args.write_smoke_note))
