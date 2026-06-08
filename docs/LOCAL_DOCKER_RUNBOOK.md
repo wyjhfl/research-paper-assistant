@@ -119,6 +119,32 @@ Check:
 - `INTERNAL_API_URL=http://backend:8000` inside Docker, or `http://localhost:8091` for local host development
 - Browser can open http://localhost:8091/health
 
+
+### `/health/ready` reports Alembic is behind but tables already exist
+
+Symptoms:
+
+- `python scripts/personal_local_check.py` fails on `GET /health/ready`.
+- The readiness payload shows `ready=false`, for example `alembic_current=003_job_runs` and `alembic_head=004_research_notes`.
+- Running `docker compose exec -T backend python -m alembic upgrade head` may fail with `DuplicateTableError` for `research_notes` if the table was already created by an older local startup path.
+
+Non-destructive checks:
+
+```bash
+docker compose exec -T backend python -m alembic current
+docker compose exec -T backend python -m alembic heads
+docker compose exec -T postgres psql -U postgres -d research_assistant -c "\d research_notes"
+```
+
+If `research_notes` already exists and matches the expected local schema, stamp the migration version instead of deleting the Docker volume:
+
+```bash
+docker compose exec -T backend python -m alembic stamp 004_research_notes
+python scripts/personal_local_check.py
+```
+
+This is non-destructive: it updates Alembic version metadata only. Do not use `docker compose down -v` unless you intentionally want to delete the local database volume.
+
 ### Old volume or embedding dimension mismatch
 
 If you changed `EMBEDDING_DIMENSION`, you must rebuild embeddings and may need a DB migration or volume rebuild.
