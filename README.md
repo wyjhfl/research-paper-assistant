@@ -3,11 +3,32 @@
 上传科研 PDF、解析论文、构建论文记忆、进行 RAG 问答、抽取研究 Idea、多 Agent 工作流、推荐引用。
 
 > 开发协作规则见 [AGENTS.md](./AGENTS.md)。
-> Release Notes 见 [RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md)（v1.0.0 正式版）。
-> RC 历史见 [RELEASE_NOTES_v1.0.0-rc.1.md](docs/RELEASE_NOTES_v1.0.0-rc.1.md)。
+> Release Notes 见 [RELEASE_NOTES_v1.0.1.md](docs/RELEASE_NOTES_v1.0.1.md)（v1.0.1 正式版）。
+> RC 历史见 [RELEASE_NOTES_v1.0.1-rc.1.md](docs/RELEASE_NOTES_v1.0.1-rc.1.md)。
+> v1.0.0 历史见 [RELEASE_NOTES_v1.0.0.md](docs/RELEASE_NOTES_v1.0.0.md) / [RELEASE_NOTES_v1.0.0-rc.1.md](docs/RELEASE_NOTES_v1.0.0-rc.1.md)。
 > 部署手册见 [DEPLOYMENT_RUNBOOK_v1.0.0.md](docs/DEPLOYMENT_RUNBOOK_v1.0.0.md)。
 > 运维监控见 [OPERATIONS_MONITORING.md](docs/OPERATIONS_MONITORING.md)。
 > 发布后反馈与 v1.0.1 backlog 见 [V1_0_1_BACKLOG.md](docs/V1_0_1_BACKLOG.md)。
+
+## 个人本地落地路径
+
+当前 `main` 已在 v1.0.1 基础上继续增强为个人本地科研工作台。推荐启动后先访问：
+
+- 首页：http://localhost:3000
+- 个人本地使用指南：http://localhost:3000/guide
+- 论文库：http://localhost:3000/papers
+- 跨论文问答：http://localhost:3000/papers/ask
+- 研究笔记：http://localhost:3000/notes
+
+最短工作流：上传论文 → 单论文问答 → 跨论文问答 → 生成文献综述表 → 保存研究笔记 → 下载 Markdown。
+
+本地使用重点能力：
+
+- 首页本地状态面板会检查后端、数据库、论文、研究笔记和 worker 状态，并给出下一步建议。
+- `/guide` 页面提供 5 步个人使用路径和常用自检命令。
+- 研究笔记工作台支持搜索、筛选、复制当前笔记，并可直接下载 Markdown 文件。
+- local embedding 下启用 hybrid lexical retrieval，结合关键词打分改善本地 RAG 召回。
+- `QUERY_EXPANSION_ENABLED=true` 时，中文问题会通过静态词典扩展英文关键词，增强中文问题对英文论文 chunk 的匹配能力。
 
 ## 当前能力
 
