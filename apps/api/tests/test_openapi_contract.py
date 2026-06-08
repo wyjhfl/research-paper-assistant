@@ -152,6 +152,8 @@ async def test_notes_have_request_and_response_schema():
 
     list_schema = _success_response_schema(spec, "/notes", "get")
     assert "notes" in list_schema.get("properties", {})
+    list_params = {param["name"] for param in spec["paths"]["/notes"]["get"].get("parameters", [])}
+    assert {"limit", "note_type", "tag", "query"}.issubset(list_params)
     detail_schema = _success_response_schema(spec, "/notes/{note_id}", "get")
     assert "note" in detail_schema.get("properties", {})
 

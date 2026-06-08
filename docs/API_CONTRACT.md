@@ -862,6 +862,9 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 | 参数 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | limit | int | 100 | 范围 [1, 200] |
+| note_type | string | null | 可选：`manual` / `qa_answer` / `source_snippet` / `review_matrix` / `idea` |
+| tag | string | null | 按标签过滤 |
+| query | string | null | 在标题和正文中搜索 |
 
 响应：
 

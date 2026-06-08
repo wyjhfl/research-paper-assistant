@@ -17,7 +17,7 @@ class FakeNoteRepo:
         self.notes.append(note)
         return note
 
-    async def list_notes(self, user_id=None, limit=100):
+    async def list_notes(self, user_id=None, limit=100, note_type=None, tag=None, query=None):
         return [note for note in self.notes if note.user_id == user_id][:limit]
 
     async def get_note(self, note_id, user_id=None):
@@ -62,6 +62,38 @@ def test_smoke_check_includes_research_notes_table():
 
     src = inspect.getsource(smoke_check.smoke_check)
     assert '"research_notes"' in src or "'research_notes'" in src
+
+
+@pytest.mark.asyncio
+async def test_list_notes_passes_filters_to_repository():
+    class RecordingRepo(FakeNoteRepo):
+        def __init__(self):
+            super().__init__()
+            self.kwargs = None
+
+        async def list_notes(self, user_id=None, limit=100, note_type=None, tag=None, query=None):
+            self.kwargs = {
+                "user_id": user_id,
+                "limit": limit,
+                "note_type": note_type,
+                "tag": tag,
+                "query": query,
+            }
+            return []
+
+    repo = RecordingRepo()
+    service = ResearchNoteService(session=None, user_id="user_a")  # type: ignore[arg-type]
+    service.repo = repo
+
+    await service.list_notes(limit=20, note_type="qa_answer", tag="qa", query=" retrieval ")
+
+    assert repo.kwargs == {
+        "user_id": "user_a",
+        "limit": 20,
+        "note_type": "qa_answer",
+        "tag": "qa",
+        "query": "retrieval",
+    }
 
 
 @pytest.mark.asyncio

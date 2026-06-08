@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   createResearchNote,
@@ -46,28 +46,32 @@ export default function NotesWorkbench() {
   const [content, setContent] = useState("");
   const [tags, setTags] = useState("");
   const [filter, setFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [exported, setExported] = useState(false);
 
-  async function loadNotes() {
+  const loadNotes = useCallback(async function loadNotes() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchResearchNotes();
+      const res = await fetchResearchNotes({
+        noteType: filter,
+        tag: tagFilter,
+        query,
+      });
       setNotes(res.notes);
     } catch (err) {
       setError(getErrorMessage(err, "加载研究笔记失败"));
     } finally {
       setLoading(false);
     }
-  }
+  }, [filter, tagFilter, query]);
 
   useEffect(() => {
     void loadNotes();
-  }, []);
+  }, [loadNotes]);
 
-  const filteredNotes = useMemo(() => {
-    if (filter === "all") return notes;
-    return notes.filter((note) => note.note_type === filter);
-  }, [filter, notes]);
+  const filteredNotes = notes;
 
   async function saveManualNote(e: React.FormEvent) {
     e.preventDefault();
@@ -112,7 +116,18 @@ export default function NotesWorkbench() {
     }
   }
 
-  const noteTypes = Array.from(new Set(notes.map((note) => note.note_type)));
+  async function exportVisibleNotes() {
+    const text = filteredNotes.map(noteToMarkdown).join("\n\n---\n\n");
+    try {
+      await navigator.clipboard.writeText(text || "暂无笔记");
+      setExported(true);
+      window.setTimeout(() => setExported(false), 1600);
+    } catch {
+      setError("导出失败，请手动复制当前页面笔记");
+    }
+  }
+
+  const allTags = Array.from(new Set(notes.flatMap((note) => note.tags))).sort();
 
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -165,7 +180,7 @@ export default function NotesWorkbench() {
             >
               全部
             </button>
-            {noteTypes.map((type) => (
+            {Object.keys(NOTE_TYPE_LABELS).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -176,6 +191,32 @@ export default function NotesWorkbench() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_180px_auto]">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索标题或正文"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <select
+            value={tagFilter}
+            onChange={(event) => setTagFilter(event.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">全部标签</option>
+            {allTags.map((tag) => (
+              <option key={tag} value={tag}>#{tag}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={exportVisibleNotes}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+          >
+            {exported ? "已导出" : "导出当前笔记"}
+          </button>
         </div>
 
         {error && (

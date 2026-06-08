@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import ResearchNote
@@ -23,10 +23,24 @@ class ResearchNoteRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_notes(self, user_id: str | None = None, limit: int = 100) -> list[ResearchNote]:
+    async def list_notes(
+        self,
+        user_id: str | None = None,
+        limit: int = 100,
+        note_type: str | None = None,
+        tag: str | None = None,
+        query: str | None = None,
+    ) -> list[ResearchNote]:
         stmt = select(ResearchNote).order_by(ResearchNote.created_at.desc()).limit(limit)
         if user_id is not None:
             stmt = stmt.where(ResearchNote.user_id == user_id)
+        if note_type:
+            stmt = stmt.where(ResearchNote.note_type == note_type)
+        if tag:
+            stmt = stmt.where(ResearchNote.tags.ilike(f"%{tag}%"))
+        if query:
+            like = f"%{query}%"
+            stmt = stmt.where(or_(ResearchNote.title.ilike(like), ResearchNote.content.ilike(like)))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

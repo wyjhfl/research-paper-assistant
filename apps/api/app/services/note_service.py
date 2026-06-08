@@ -120,8 +120,20 @@ class ResearchNoteService:
         )
         return await self.repo.create_note(note)
 
-    async def list_notes(self, limit: int = 100) -> list[ResearchNote]:
-        return await self.repo.list_notes(user_id=self.user_id, limit=limit)
+    async def list_notes(
+        self,
+        limit: int = 100,
+        note_type: str | None = None,
+        tag: str | None = None,
+        query: str | None = None,
+    ) -> list[ResearchNote]:
+        return await self.repo.list_notes(
+            user_id=self.user_id,
+            limit=limit,
+            note_type=note_type,
+            tag=tag,
+            query=query.strip() if query else None,
+        )
 
     async def get_note(self, note_id: int) -> ResearchNote | None:
         return await self.repo.get_note(note_id, user_id=self.user_id)

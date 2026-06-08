@@ -405,7 +405,8 @@ test.describe("/papers/review", () => {
 
 test.describe("/notes", () => {
   test("显示研究笔记工作台、保存手动笔记并复制", async ({ page }) => {
-    await page.route("**/notes?limit=100", async (route) => {
+    await page.route("**/notes?*", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -462,6 +463,9 @@ test.describe("/notes", () => {
     await main.locator('button:has-text("保存笔记")').click();
     await expect(main).toContainText("Manual note");
     await expect(main.locator('button:has-text("复制")').first()).toBeVisible();
+    await main.getByPlaceholder("搜索标题或正文").fill("Existing");
+    await expect(main).toContainText("Existing note");
+    await expect(main.locator('button:has-text("导出当前笔记")')).toBeVisible();
   });
 });
 

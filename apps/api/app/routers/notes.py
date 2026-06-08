@@ -44,11 +44,14 @@ async def create_note(
 @router.get("", response_model=ResearchNoteListResponse)
 async def list_notes(
     limit: int = Query(default=100, ge=1, le=200),
+    note_type: str | None = Query(default=None, pattern="^(manual|qa_answer|source_snippet|review_matrix|idea)$"),
+    tag: str | None = Query(default=None, min_length=1, max_length=40),
+    query: str | None = Query(default=None, min_length=1, max_length=100),
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_user_id),
 ):
     service = ResearchNoteService(db, user_id=user_id)
-    notes = await service.list_notes(limit=limit)
+    notes = await service.list_notes(limit=limit, note_type=note_type, tag=tag, query=query)
     return {
         "notes": [await service.to_item(note) for note in notes],
         "total": len(notes),

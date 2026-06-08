@@ -657,8 +657,20 @@ export async function createResearchNote(req: CreateResearchNoteRequest): Promis
   });
 }
 
-export async function fetchResearchNotes(limit: number = 100): Promise<ResearchNoteListResponse> {
-  return apiFetch<ResearchNoteListResponse>(`/notes?limit=${limit}`);
+export interface FetchResearchNotesOptions {
+  limit?: number;
+  noteType?: string;
+  tag?: string;
+  query?: string;
+}
+
+export async function fetchResearchNotes(options: FetchResearchNotesOptions = {}): Promise<ResearchNoteListResponse> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 100));
+  if (options.noteType && options.noteType !== "all") params.set("note_type", options.noteType);
+  if (options.tag && options.tag !== "all") params.set("tag", options.tag);
+  if (options.query?.trim()) params.set("query", options.query.trim());
+  return apiFetch<ResearchNoteListResponse>(`/notes?${params.toString()}`);
 }
 
 export async function deleteResearchNote(noteId: number): Promise<void> {
