@@ -53,6 +53,8 @@ def test_readme_mentions_personal_workflow_smoke_script():
     assert "scripts/personal_local_check.ps1" in content
     assert "scripts/personal_local_start.ps1" in content
     assert "-SkipBuild" in content
+    assert "-CheckRetries" in content
+    assert "-RetryDelaySeconds" in content
     assert "-RunWorkflowSmoke" in content
     assert "-WriteSmokeNote" in content
     assert "--write-note" in content

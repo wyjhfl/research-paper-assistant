@@ -122,6 +122,12 @@ powershell -ExecutionPolicy Bypass -File scripts/personal_local_start.ps1 -RunMo
 powershell -ExecutionPolicy Bypass -File scripts/personal_local_start.ps1 -SkipBuild -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote
 ```
 
+如果 Docker 刚启动时偶发 readiness race，可调整验证重试次数和等待间隔：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/personal_local_start.ps1 -SkipBuild -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote -CheckRetries 10 -RetryDelaySeconds 8
+```
+
 如需验证个人使用闭环，可运行端到端工作流烟测。默认只验证论文选择、单论文问答和综述表生成，不写入研究笔记：
 
 ```bash

@@ -97,6 +97,11 @@ class TestPersonalLocalCheckStaticSafety:
         assert "-RunModelSmoke" in content
         assert "-RunWorkflowSmoke" in content
         assert "-WriteSmokeNote" in content
+        assert "$CheckRetries" in content
+        assert "$RetryDelaySeconds" in content
+        assert "Start-Sleep -Seconds $RetryDelaySeconds" in content
+        assert "while ($attempt -lt $CheckRetries)" in content
+        assert "Personal local validation passed" in content
         forbidden = [
             "down -v",
             "docker compose down",

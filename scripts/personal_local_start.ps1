@@ -2,7 +2,9 @@ param(
     [switch]$RunModelSmoke,
     [switch]$RunWorkflowSmoke,
     [switch]$WriteSmokeNote,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [int]$CheckRetries = 6,
+    [int]$RetryDelaySeconds = 5
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,5 +40,21 @@ if ($WriteSmokeNote) {
 }
 
 Write-Host "Running personal local validation..." -ForegroundColor Cyan
-powershell @checkArgs
-exit $LASTEXITCODE
+$attempt = 0
+while ($attempt -lt $CheckRetries) {
+    $attempt += 1
+    Write-Host "Validation attempt $attempt/$CheckRetries..." -ForegroundColor Cyan
+    powershell @checkArgs
+    $checkExitCode = $LASTEXITCODE
+    if ($checkExitCode -eq 0) {
+        Write-Host "Personal local validation passed." -ForegroundColor Green
+        exit 0
+    }
+    if ($attempt -lt $CheckRetries) {
+        Write-Host "Validation failed; waiting before retry..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $RetryDelaySeconds
+    }
+}
+
+Write-Host "ERROR: personal local validation failed after $CheckRetries attempts." -ForegroundColor Red
+exit $checkExitCode
