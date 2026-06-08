@@ -541,7 +541,11 @@ test.describe("/notes", () => {
     await expect(main.locator('button:has-text("复制")').first()).toBeVisible();
     await main.getByPlaceholder("搜索标题或正文").fill("Existing");
     await expect(main).toContainText("Existing note");
-    await expect(main.locator('button:has-text("导出当前笔记")')).toBeVisible();
+    await expect(main.locator('button:has-text("\u590d\u5236\u5f53\u524d\u7b14\u8bb0")')).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await main.locator('button:has-text("\u4e0b\u8f7d Markdown")').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^research-notes-\d{8}\.md$/);
   });
 });
 

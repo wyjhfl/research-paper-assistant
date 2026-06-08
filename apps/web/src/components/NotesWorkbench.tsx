@@ -36,6 +36,18 @@ function noteToMarkdown(note: ResearchNoteItem): string {
   return [`# ${note.title}`, "", note.content, source, tags].join("\n");
 }
 
+
+function visibleNotesToMarkdown(notes: ResearchNoteItem[]): string {
+  return notes.length > 0 ? notes.map(noteToMarkdown).join("\n\n---\n\n") : "\u6682\u65e0\u7b14\u8bb0";
+}
+
+function todayFileStamp(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
 export default function NotesWorkbench() {
   const [notes, setNotes] = useState<ResearchNoteItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,14 +129,27 @@ export default function NotesWorkbench() {
   }
 
   async function exportVisibleNotes() {
-    const text = filteredNotes.map(noteToMarkdown).join("\n\n---\n\n");
+    const text = visibleNotesToMarkdown(filteredNotes);
     try {
-      await navigator.clipboard.writeText(text || "暂无笔记");
+      await navigator.clipboard.writeText(text);
       setExported(true);
       window.setTimeout(() => setExported(false), 1600);
     } catch {
-      setError("导出失败，请手动复制当前页面笔记");
+      setError("\u5bfc\u51fa\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236\u5f53\u524d\u9875\u9762\u7b14\u8bb0");
     }
+  }
+
+  function downloadVisibleNotes() {
+    const text = visibleNotesToMarkdown(filteredNotes);
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `research-notes-${todayFileStamp()}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   }
 
   const allTags = Array.from(new Set(notes.flatMap((note) => note.tags))).sort();
@@ -210,13 +235,22 @@ export default function NotesWorkbench() {
               <option key={tag} value={tag}>#{tag}</option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={exportVisibleNotes}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-          >
-            {exported ? "已导出" : "导出当前笔记"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={exportVisibleNotes}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+            >
+              {exported ? "\u5df2\u590d\u5236" : "\u590d\u5236\u5f53\u524d\u7b14\u8bb0"}
+            </button>
+            <button
+              type="button"
+              onClick={downloadVisibleNotes}
+              className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+            >
+              {"\u4e0b\u8f7d Markdown"}
+            </button>
+          </div>
         </div>
 
         {error && (
