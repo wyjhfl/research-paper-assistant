@@ -49,6 +49,9 @@ def test_readme_personal_check_prefers_non_destructive_alembic_recovery():
 def test_readme_mentions_personal_workflow_smoke_script():
     content = _readme()
     assert "scripts/personal_workflow_smoke.py" in content
+    assert "scripts/personal_local_check.ps1" in content
+    assert "-RunWorkflowSmoke" in content
+    assert "-WriteSmokeNote" in content
     assert "--write-note" in content
     assert "--run-workflow-smoke" in content
     assert "--write-smoke-note" in content

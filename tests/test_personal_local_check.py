@@ -71,8 +71,16 @@ class TestPersonalLocalCheckStaticSafety:
     def test_powershell_wrapper_resolves_python_structured(self):
         content = PS_SCRIPT.read_text(encoding="utf-8")
         assert "Resolve-PythonCommand" in content
+        assert "Get-PythonCandidateCommands" in content
         assert "Test-PythonCandidate" in content
+        assert "$env:PYTHON" in content
+        assert "Get-PSDrive" in content
+        assert "Python*" in content
         assert "@($python.Args + $scriptArgs)" in content
+        assert "$RunWorkflowSmoke" in content
+        assert "$WriteSmokeNote" in content
+        assert "--run-workflow-smoke" in content
+        assert "--write-smoke-note" in content
         assert "& \"py -3\"" not in content
         assert "eval_real_model.py" not in content
 

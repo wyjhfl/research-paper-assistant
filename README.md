@@ -109,6 +109,12 @@ python scripts/personal_local_check.py --run-workflow-smoke
 python scripts/personal_local_check.py --run-workflow-smoke --write-smoke-note
 ```
 
+Windows PowerShell 用户也可以使用包装脚本；该脚本会自动探测 `python`、`py -3`、常见 Python 安装目录和 Codex 本地工具 Python：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/personal_local_check.ps1 -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote
+```
+
 如需验证个人使用闭环，可运行端到端工作流烟测。默认只验证论文选择、单论文问答和综述表生成，不写入研究笔记：
 
 ```bash
