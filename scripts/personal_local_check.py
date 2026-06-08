@@ -266,6 +266,23 @@ def check_scripts(run_model_smoke: bool = False) -> list[Check]:
     return checks
 
 
+def check_workflow_smoke(run_workflow_smoke: bool = False, write_smoke_note: bool = False) -> list[Check]:
+    if not run_workflow_smoke:
+        return [Check("personal workflow smoke", True, "skipped by default; pass --run-workflow-smoke to test the local workflow")]
+    args = [sys.executable, "scripts/personal_workflow_smoke.py"]
+    if write_smoke_note:
+        args.append("--write-note")
+    workflow = _run(args, timeout=180)
+    workflow_ok = False
+    if workflow.returncode == 0:
+        try:
+            payload = json.loads(workflow.stdout)
+            workflow_ok = payload.get("ok") is True
+        except json.JSONDecodeError:
+            workflow_ok = False
+    return [Check("personal workflow smoke", workflow_ok, "passed" if workflow_ok else "failed")]
+
+
 def check_scanners() -> list[Check]:
     checks: list[Check] = []
     secret = _run([sys.executable, "scripts/check_docs_secrets.py"], timeout=60)
@@ -289,6 +306,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Run model_smoke_check.py. This may call the configured real LLM provider.",
     )
+    parser.add_argument(
+        "--run-workflow-smoke",
+        action="store_true",
+        help="Run personal_workflow_smoke.py. This may call the configured LLM through RAG.",
+    )
+    parser.add_argument(
+        "--write-smoke-note",
+        action="store_true",
+        help="When used with --run-workflow-smoke, allow creating or reusing one local smoke note.",
+    )
     return parser.parse_args(argv)
 
 
@@ -303,6 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     checks.extend(check_http(args.api_base.rstrip("/"), args.frontend_base.rstrip("/")))
     checks.extend(check_personal_workflow(args.api_base.rstrip("/")))
     checks.extend(check_scripts(run_model_smoke=args.run_model_smoke))
+    checks.extend(check_workflow_smoke(run_workflow_smoke=args.run_workflow_smoke, write_smoke_note=args.write_smoke_note))
     checks.extend(check_scanners())
 
     ok = all(c.ok for c in checks)

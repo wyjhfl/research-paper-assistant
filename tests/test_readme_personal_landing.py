@@ -49,4 +49,6 @@ def test_readme_mentions_personal_workflow_smoke_script():
     content = _readme()
     assert "scripts/personal_workflow_smoke.py" in content
     assert "--write-note" in content
+    assert "--run-workflow-smoke" in content
+    assert "--write-smoke-note" in content
     assert "\u4e0d\u8f93\u51fa\u6a21\u578b\u56de\u7b54\u5168\u6587" in content

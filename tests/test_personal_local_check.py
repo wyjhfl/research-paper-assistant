@@ -319,8 +319,10 @@ class TestPersonalLocalCheckRuntime:
 
         assert module.main([]) == 0
         assert not any("model_smoke_check.py" in cmd for cmd in commands)
+        assert not any("personal_workflow_smoke.py" in cmd for cmd in commands)
         out = json.loads(capsys.readouterr().out)
         assert any(c["name"] == "backend model_smoke_check.py" and "skipped" in c["message"] for c in out["checks"])
+        assert any(c["name"] == "personal workflow smoke" and "skipped" in c["message"] for c in out["checks"])
 
     def test_run_model_smoke_executes_model_command(self, monkeypatch, capsys):
         module = load_module()
@@ -351,3 +353,39 @@ class TestPersonalLocalCheckRuntime:
 
         assert module.main(["--run-model-smoke"]) == 0
         assert any("model_smoke_check.py" in cmd for cmd in commands)
+
+    def test_run_workflow_smoke_executes_optional_command(self, monkeypatch, capsys):
+        module = load_module()
+        commands: list[str] = []
+
+        def fake_run(args, timeout=60):
+            cmd = " ".join(args)
+            commands.append(cmd)
+            if "ls-files" in cmd or "status --short" in cmd:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if "docker --version" in cmd:
+                return subprocess.CompletedProcess(args, 0, "Docker version test", "")
+            if "docker compose ps" in cmd:
+                service_rows = "\n".join([
+                    '{"Service":"backend","State":"running","Health":"healthy"}',
+                    '{"Service":"frontend","State":"running","Health":""}',
+                    '{"Service":"postgres","State":"running","Health":"healthy"}',
+                ])
+                return subprocess.CompletedProcess(args, 0, service_rows, "")
+            if "smoke_check.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, "RESULT: ALL CHECKS PASSED", "")
+            if "personal_workflow_smoke.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, '{"ok": true, "checks": []}', "")
+            return subprocess.CompletedProcess(args, 0, "PASSED", "")
+
+        monkeypatch.setattr(module, "_run", fake_run)
+        monkeypatch.setattr(module, "_http_json", successful_http_json)
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "resolve_git", lambda: "git")
+
+        assert module.main(["--run-workflow-smoke", "--write-smoke-note"]) == 0
+        workflow_commands = [cmd for cmd in commands if "personal_workflow_smoke.py" in cmd]
+        assert workflow_commands
+        assert "--write-note" in workflow_commands[0]
+        out = json.loads(capsys.readouterr().out)
+        assert any(c["name"] == "personal workflow smoke" and c["ok"] and "passed" in c["message"] for c in out["checks"])

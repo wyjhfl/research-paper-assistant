@@ -97,6 +97,18 @@ python scripts/personal_local_check.py
 python scripts/personal_local_check.py --run-model-smoke
 ```
 
+如果希望一键本地检查同时覆盖个人工作流闭环，可执行：
+
+```bash
+python scripts/personal_local_check.py --run-workflow-smoke
+```
+
+需要在一键检查中同时验证研究笔记保存时，显式增加 `--write-smoke-note`：
+
+```bash
+python scripts/personal_local_check.py --run-workflow-smoke --write-smoke-note
+```
+
 如需验证个人使用闭环，可运行端到端工作流烟测。默认只验证论文选择、单论文问答和综述表生成，不写入研究笔记：
 
 ```bash
