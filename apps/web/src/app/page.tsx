@@ -52,6 +52,12 @@ const CAPABILITIES = [
     href: "/mcp",
   },
   {
+    icon: "指南",
+    title: "个人使用指南",
+    description: "按上传、问答、综述、笔记和导出五步完成本地科研工作流",
+    href: "/guide",
+  },
+  {
     icon: "评测",
     title: "真实模型评测",
     description: "eval_real_model.py 脚本验证真实 LLM + Embedding 质量",
@@ -60,6 +66,7 @@ const CAPABILITIES = [
 ];
 
 const QUICK_START = [
+  { label: "个人使用指南", href: "/guide", primary: true },
   { label: "上传论文", href: "/papers", primary: true },
   { label: "跨论文问答", href: "/papers/ask", primary: true },
   { label: "生成综述表", href: "/papers/review", primary: false },

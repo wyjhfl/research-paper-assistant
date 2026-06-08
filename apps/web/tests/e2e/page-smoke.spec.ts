@@ -69,6 +69,7 @@ test.describe("首页 /", () => {
     await expect(main).toContainText("研究笔记");
     await expect(main).toContainText("Agent");
     await expect(main).toContainText("MCP");
+    await expect(main).toContainText("个人使用指南");
   });
 
   test("页面不是空白", async ({ page }) => {
@@ -90,8 +91,26 @@ test.describe("首页 /", () => {
     await expect(main).toContainText("总体：正常");
     await expect(main).toContainText("1 篇已完成 / 5 个片段");
     await expect(main).toContainText("2 条笔记");
+    await expect(main).toContainText("下一步建议");
+    await expect(main).toContainText("整理研究笔记");
+    await expect(main).toContainText("常见本地修复命令");
   });
 });
+
+
+test.describe("/guide", () => {
+  test("显示个人本地使用的五步路径", async ({ page }) => {
+    await page.goto("/guide");
+    const main = await waitForSsrContent(page, "\u4e2a\u4eba\u672c\u5730\u4f7f\u7528\u6307\u5357");
+    await expect(main).toContainText("\u7b2c 1 \u6b65\uff1a\u4e0a\u4f20\u8bba\u6587");
+    await expect(main).toContainText("\u7b2c 2 \u6b65\uff1a\u5355\u8bba\u6587\u95ee\u7b54");
+    await expect(main).toContainText("\u7b2c 3 \u6b65\uff1a\u8de8\u8bba\u6587\u95ee\u7b54");
+    await expect(main).toContainText("\u7b2c 4 \u6b65\uff1a\u751f\u6210\u6587\u732e\u7efc\u8ff0\u8868");
+    await expect(main).toContainText("\u7b2c 5 \u6b65\uff1a\u6574\u7406\u5e76\u5bfc\u51fa\u7814\u7a76\u7b14\u8bb0");
+    await expect(main).toContainText("\u4e2a\u4eba\u672c\u5730\u9650\u5236");
+  });
+});
+
 
 test.describe("/papers", () => {
   test("h1 包含'论文库'", async ({ page }) => {

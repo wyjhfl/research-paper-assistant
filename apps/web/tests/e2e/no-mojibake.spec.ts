@@ -36,6 +36,7 @@ const SCAN_FILES = [
   "src/app/page.tsx",
   "src/app/loading.tsx",
   "src/app/not-found.tsx",
+  "src/app/guide/page.tsx",
   "src/app/ideas/page.tsx",
   "src/app/ideas/[id]/page.tsx",
   "src/app/papers/page.tsx",
