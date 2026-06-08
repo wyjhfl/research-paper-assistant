@@ -36,6 +36,7 @@ def test_readme_personal_check_prefers_non_destructive_alembic_recovery():
     start = content.index("### \u4e2a\u4eba\u672c\u5730\u843d\u5730\u68c0\u67e5")
     end = content.index("### \u672c\u5730\u5f00\u53d1", start)
     section = content[start:end]
+    assert "papers/ideas/notes/jobs" in section
     assert "alembic stamp" in section
     assert "LOCAL_DOCKER_RUNBOOK.md" in section
     assert "docker compose down -v" in section

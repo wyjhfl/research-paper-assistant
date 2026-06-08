@@ -195,6 +195,20 @@ def _readiness_message(message: str) -> str:
     return f"{message}; {hint}"
 
 
+def _count_json_items(message: str, collection_key: str) -> int | None:
+    try:
+        data = json.loads(message)
+    except json.JSONDecodeError:
+        return None
+    total = data.get("total")
+    if isinstance(total, int):
+        return total
+    collection = data.get(collection_key)
+    if isinstance(collection, list):
+        return len(collection)
+    return None
+
+
 def check_http(api_base: str, frontend_base: str) -> list[Check]:
     checks: list[Check] = []
     ok, msg = _http_json(api_base, "/health")
@@ -205,6 +219,24 @@ def check_http(api_base: str, frontend_base: str) -> list[Check]:
     ok, msg = _http_status(frontend_base)
     checks.append(Check("GET frontend", ok, msg))
     return checks
+
+
+def check_personal_workflow(api_base: str) -> list[Check]:
+    endpoint_specs = [
+        ("papers", "/papers", "papers"),
+        ("ideas", "/ideas", "ideas"),
+        ("notes", "/notes", "notes"),
+        ("jobs", "/jobs", "jobs"),
+    ]
+    ok_all = True
+    parts: list[str] = []
+    for label, path, collection_key in endpoint_specs:
+        ok, msg = _http_json(api_base, path)
+        count = _count_json_items(msg, collection_key) if ok else None
+        endpoint_ok = ok and count is not None
+        ok_all = ok_all and endpoint_ok
+        parts.append(f"{label}={count}" if endpoint_ok else f"{label}=unavailable")
+    return [Check("personal workflow endpoints", ok_all, ", ".join(parts))]
 
 
 def check_scripts(run_model_smoke: bool = False) -> list[Check]:
@@ -261,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": False, "checks": [asdict(c) for c in checks]}, ensure_ascii=False, indent=2))
         return 1
     checks.extend(check_http(args.api_base.rstrip("/"), args.frontend_base.rstrip("/")))
+    checks.extend(check_personal_workflow(args.api_base.rstrip("/")))
     checks.extend(check_scripts(run_model_smoke=args.run_model_smoke))
     checks.extend(check_scanners())
 
