@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = PROJECT_ROOT / "scripts" / "personal_local_check.py"
 PS_SCRIPT = PROJECT_ROOT / "scripts" / "personal_local_check.ps1"
+START_PS_SCRIPT = PROJECT_ROOT / "scripts" / "personal_local_start.ps1"
 
 
 def load_module():
@@ -41,6 +42,7 @@ class TestPersonalLocalCheckStaticSafety:
     def test_script_exists(self):
         assert SCRIPT.exists()
         assert PS_SCRIPT.exists()
+        assert START_PS_SCRIPT.exists()
 
     def test_no_dangerous_operations(self):
         content = SCRIPT.read_text(encoding="utf-8")
@@ -87,6 +89,27 @@ class TestPersonalLocalCheckStaticSafety:
         assert "--write-smoke-note" in content
         assert "& \"py -3\"" not in content
         assert "eval_real_model.py" not in content
+
+    def test_powershell_start_script_is_non_destructive_and_runs_check(self):
+        content = START_PS_SCRIPT.read_text(encoding="utf-8")
+        assert "docker compose up -d --build" in content
+        assert "scripts\\personal_local_check.ps1" in content
+        assert "-RunModelSmoke" in content
+        assert "-RunWorkflowSmoke" in content
+        assert "-WriteSmokeNote" in content
+        forbidden = [
+            "down -v",
+            "docker compose down",
+            "Remove-Item",
+            "eval_real_model.py",
+            "restore_all",
+            "backup_all",
+            "-ConfirmRestore",
+            "git push",
+            "git tag",
+        ]
+        for token in forbidden:
+            assert token not in content
 
 
 class TestPersonalLocalCheckRuntime:

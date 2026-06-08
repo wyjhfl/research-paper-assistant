@@ -102,6 +102,7 @@ python scripts/personal_workflow_smoke.py --write-note
 python scripts/personal_local_check.py --run-workflow-smoke
 python scripts/personal_local_check.py --run-workflow-smoke --write-smoke-note
 powershell -ExecutionPolicy Bypass -File scripts/personal_local_check.ps1 -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote
+powershell -ExecutionPolicy Bypass -File scripts/personal_local_start.ps1 -SkipBuild -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote
 
 # 真实模型评测
 docker compose exec -T backend python scripts/eval_real_model.py
