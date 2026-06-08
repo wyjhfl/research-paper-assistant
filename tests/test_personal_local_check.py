@@ -33,6 +33,10 @@ def successful_http_json(api_base, path, timeout=10):
     return True, responses[path]
 
 
+def successful_http_page_contains(url, marker, timeout=10):
+    return True, f"status=200; marker={marker}"
+
+
 class TestPersonalLocalCheckStaticSafety:
     def test_script_exists(self):
         assert SCRIPT.exists()
@@ -115,6 +119,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -146,6 +151,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 1
@@ -194,6 +200,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", fake_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 1
@@ -243,6 +250,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", fake_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -283,6 +291,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", fake_http_status)
+        monkeypatch.setattr(module, "_http_page_contains", lambda url, marker, timeout=10: (visited_urls.append(url) or (True, f"status=200; marker={marker}")))
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -293,6 +302,45 @@ class TestPersonalLocalCheckRuntime:
         for path in ["/", "/guide", "/papers", "/papers/review", "/notes"]:
             assert f"http://localhost:3000{path}" in visited_urls
             assert path in routes["message"]
+
+    def test_frontend_route_check_fails_when_expected_marker_is_missing(self, monkeypatch, capsys):
+        module = load_module()
+
+        def fake_run(args, timeout=60):
+            cmd = " ".join(args)
+            if "ls-files" in cmd or "status --short" in cmd:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if "docker --version" in cmd:
+                return subprocess.CompletedProcess(args, 0, "Docker version test", "")
+            if "docker compose ps" in cmd:
+                service_rows = "\n".join([
+                    '{"Service":"backend","State":"running","Health":"healthy"}',
+                    '{"Service":"frontend","State":"running","Health":""}',
+                    '{"Service":"postgres","State":"running","Health":"healthy"}',
+                ])
+                return subprocess.CompletedProcess(args, 0, service_rows, "")
+            if "smoke_check.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, "RESULT: ALL CHECKS PASSED", "")
+            return subprocess.CompletedProcess(args, 0, "PASSED", "")
+
+        def fake_http_page_contains(url, marker, timeout=10):
+            if url.endswith("/guide"):
+                return False, f"status=200; marker_missing={marker}"
+            return True, f"status=200; marker={marker}"
+
+        monkeypatch.setattr(module, "_run", fake_run)
+        monkeypatch.setattr(module, "_http_json", successful_http_json)
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", fake_http_page_contains, raising=False)
+        monkeypatch.setattr(module, "resolve_git", lambda: "git")
+
+        assert module.main([]) == 1
+        out = json.loads(capsys.readouterr().out)
+        routes = next(c for c in out["checks"] if c["name"] == "frontend core routes")
+
+        assert routes["ok"] is False
+        assert "/guide=failed" in routes["message"]
+        assert "marker_missing" in routes["message"]
 
     def test_personal_workflow_counts_include_next_step_when_notes_are_empty(self, monkeypatch, capsys):
         module = load_module()
@@ -328,6 +376,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", fake_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -362,6 +411,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main([]) == 0
@@ -396,6 +446,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main(["--run-model-smoke"]) == 0
@@ -428,6 +479,7 @@ class TestPersonalLocalCheckRuntime:
         monkeypatch.setattr(module, "_run", fake_run)
         monkeypatch.setattr(module, "_http_json", successful_http_json)
         monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "_http_page_contains", successful_http_page_contains)
         monkeypatch.setattr(module, "resolve_git", lambda: "git")
 
         assert module.main(["--run-workflow-smoke", "--write-smoke-note"]) == 0

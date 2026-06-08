@@ -87,7 +87,7 @@ docker compose up --build
 python scripts/personal_local_check.py
 ```
 
-该脚本只做状态检查，不读取或输出 `.env` 内容，不执行 `eval_real_model.py`，不执行 backup/restore/cleanup `--confirm`。检查范围包括：Git 安全状态、Docker 服务、`/health`、`/health/ready`、前端 HTTP、前端核心路由（首页、指南、论文、综述、笔记）、papers/ideas/notes/jobs 核心工作流端点计数、`smoke_check.py`、文档密钥扫描和前端乱码扫描；仅在显式传入 `--run-model-smoke` 时执行 `model_smoke_check.py`。
+该脚本只做状态检查，不读取或输出 `.env` 内容，不执行 `eval_real_model.py`，不执行 backup/restore/cleanup `--confirm`。检查范围包括：Git 安全状态、Docker 服务、`/health`、`/health/ready`、前端 HTTP、前端核心路由（首页、指南、论文、综述、笔记）的关键文案、papers/ideas/notes/jobs 核心工作流端点计数、`smoke_check.py`、文档密钥扫描和前端乱码扫描；仅在显式传入 `--run-model-smoke` 时执行 `model_smoke_check.py`。
 
 当论文或研究笔记为空时，脚本会在 `personal workflow endpoints` 中给出下一步建议，例如 `next=upload_first_paper` 或 `next=save_first_research_note`，方便按 `/papers`、`/notes` 继续完成个人工作流闭环。
 

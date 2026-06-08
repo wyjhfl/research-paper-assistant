@@ -169,6 +169,21 @@ def _http_status(url: str, timeout: int = 10) -> tuple[bool, str]:
         return False, type(exc).__name__
 
 
+def _http_page_contains(url: str, marker: str, timeout: int = 10) -> tuple[bool, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            status_ok = 200 <= resp.status < 400
+            marker_ok = marker in body
+            if status_ok and marker_ok:
+                return True, f"status={resp.status}; marker={marker}"
+            if status_ok:
+                return False, f"status={resp.status}; marker_missing={marker}"
+            return False, f"status={resp.status}"
+    except (urllib.error.URLError, TimeoutError) as exc:
+        return False, type(exc).__name__
+
+
 def _readiness_message(message: str) -> str:
     try:
         data = json.loads(message)
@@ -222,11 +237,17 @@ def check_http(api_base: str, frontend_base: str) -> list[Check]:
 
 
 def check_frontend_routes(frontend_base: str) -> list[Check]:
-    routes = ["/", "/guide", "/papers", "/papers/review", "/notes"]
+    routes = [
+        ("/", "多 Agent 科研论文助手"),
+        ("/guide", "个人本地使用指南"),
+        ("/papers", "论文库"),
+        ("/papers/review", "文献综述表"),
+        ("/notes", "研究笔记"),
+    ]
     ok_all = True
     parts: list[str] = []
-    for route in routes:
-        ok, msg = _http_status(f"{frontend_base}{route}")
+    for route, marker in routes:
+        ok, msg = _http_page_contains(f"{frontend_base}{route}", marker)
         ok_all = ok_all and ok
         parts.append(f"{route}={msg}" if ok else f"{route}=failed:{msg}")
     return [Check("frontend core routes", ok_all, ", ".join(parts))]

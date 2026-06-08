@@ -98,7 +98,7 @@ python scripts/personal_workflow_smoke.py
 python scripts/personal_workflow_smoke.py --write-note
 
 # 一键本地检查 + 可选个人工作流闭环烟测
-# 覆盖 Git/Docker/health/ready/前端核心路由/papers/ideas/notes/jobs/smoke/security
+# 覆盖 Git/Docker/health/ready/前端核心路由关键文案/papers/ideas/notes/jobs/smoke/security
 python scripts/personal_local_check.py --run-workflow-smoke
 python scripts/personal_local_check.py --run-workflow-smoke --write-smoke-note
 powershell -ExecutionPolicy Bypass -File scripts/personal_local_check.ps1 -RunModelSmoke -RunWorkflowSmoke -WriteSmokeNote

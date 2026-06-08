@@ -38,6 +38,7 @@ def test_readme_personal_check_prefers_non_destructive_alembic_recovery():
     section = content[start:end]
     assert "papers/ideas/notes/jobs" in section
     assert "\u524d\u7aef\u6838\u5fc3\u8def\u7531" in section
+    assert "\u5173\u952e\u6587\u6848" in section
     assert "save_first_research_note" in section
     assert "alembic stamp" in section
     assert "LOCAL_DOCKER_RUNBOOK.md" in section
