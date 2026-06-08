@@ -57,6 +57,8 @@ The strongest patterns from comparable research assistants are:
 - Added a structured literature review matrix page for selected completed
   papers: problem, method, evidence, metric/result, limitation, future work,
   and source chunk links.
+- Added a research notes workbench for saving manual notes, QA answers, source
+  snippets, and review matrices as local Markdown-friendly notes.
 - Added follow-up question chips after successful answers.
 - Changed copy behavior to copy the answer plus compact source metadata.
 - Added Idea extraction controls for LLM fallback and max idea count.
@@ -126,6 +128,11 @@ Validation:
 
 - Notes preserve user isolation.
 - Notes do not store API keys, prompt raw text, or long hidden context.
+
+Status: **Landed in practical form.** `/notes` provides a research notes
+workbench, and QA/source/review matrix UI can save reusable local notes. Source
+metadata is filtered to a safe allowlist and paper/chunk references are checked
+against the current user.
 
 ### P2: Better source viewer
 

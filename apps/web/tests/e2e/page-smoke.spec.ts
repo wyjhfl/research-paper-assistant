@@ -22,6 +22,7 @@ test.describe("首页 /", () => {
     const main = getAppMain(page);
     await expect(main).toContainText("论文库");
     await expect(main).toContainText("跨论文问答");
+    await expect(main).toContainText("研究笔记");
     await expect(main).toContainText("Agent");
     await expect(main).toContainText("MCP");
   });
@@ -363,6 +364,28 @@ test.describe("/papers/review", () => {
         }),
       });
     });
+    await page.route("**/notes", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          note: {
+            id: 3,
+            title: "文献综述表：1 篇论文",
+            content: "matrix",
+            note_type: "review_matrix",
+            paper_id: null,
+            paper_title: null,
+            chunk_id: null,
+            source: { source_kind: "review_matrix" },
+            tags: ["review", "matrix"],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+      });
+    });
 
     await page.goto("/papers/review");
     const main = getAppMain(page);
@@ -375,6 +398,70 @@ test.describe("/papers/review", () => {
     await expect(main).toContainText("The paper studies a retrieval problem.");
     await expect(main.locator('a:has-text("chunk #0")')).toBeVisible();
     await expect(main.locator('button:has-text("复制 Markdown")')).toBeVisible();
+    await main.locator('button:has-text("存为笔记")').click();
+    await expect(main.locator('button:has-text("已保存")')).toBeVisible();
+  });
+});
+
+test.describe("/notes", () => {
+  test("显示研究笔记工作台、保存手动笔记并复制", async ({ page }) => {
+    await page.route("**/notes?limit=100", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          notes: [
+            {
+              id: 1,
+              title: "Existing note",
+              content: "Saved answer content.",
+              note_type: "qa_answer",
+              paper_id: 1,
+              paper_title: "Paper Alpha",
+              chunk_id: 10,
+              source: { paper_id: 1, chunk_id: 10, chunk_index: 0 },
+              tags: ["qa"],
+              created_at: "2026-01-01T00:00:00Z",
+              updated_at: "2026-01-01T00:00:00Z",
+            },
+          ],
+          total: 1,
+        }),
+      });
+    });
+    await page.route("**/notes", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          note: {
+            id: 2,
+            title: "Manual note",
+            content: "Manual note body.",
+            note_type: "manual",
+            paper_id: null,
+            paper_title: null,
+            chunk_id: null,
+            source: {},
+            tags: ["draft"],
+            created_at: "2026-01-02T00:00:00Z",
+            updated_at: "2026-01-02T00:00:00Z",
+          },
+        }),
+      });
+    });
+
+    await page.goto("/notes");
+    const main = getAppMain(page);
+    await expect(main.locator("h1").first()).toContainText("研究笔记");
+    await expect(main).toContainText("Existing note");
+    await main.getByPlaceholder("笔记标题").fill("Manual note");
+    await main.getByPlaceholder("笔记内容").fill("Manual note body.");
+    await main.getByPlaceholder("标签，用逗号分隔").fill("draft");
+    await main.locator('button:has-text("保存笔记")').click();
+    await expect(main).toContainText("Manual note");
+    await expect(main.locator('button:has-text("复制")').first()).toBeVisible();
   });
 });
 

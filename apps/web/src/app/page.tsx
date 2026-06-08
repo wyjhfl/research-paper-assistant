@@ -27,6 +27,12 @@ const CAPABILITIES = [
     href: "/papers/review",
   },
   {
+    icon: "笔记",
+    title: "研究笔记",
+    description: "收藏回答、来源片段和阅读想法，沉淀为可复制的 Markdown 笔记",
+    href: "/notes",
+  },
+  {
     icon: "想法",
     title: "Idea 抽取",
     description: "从论文中提取研究想法、研究问题与方法提示",
@@ -56,6 +62,7 @@ const QUICK_START = [
   { label: "上传论文", href: "/papers", primary: true },
   { label: "跨论文问答", href: "/papers/ask", primary: true },
   { label: "生成综述表", href: "/papers/review", primary: false },
+  { label: "研究笔记", href: "/notes", primary: false },
   { label: "运行 Agent", href: "/agent", primary: false },
 ];
 

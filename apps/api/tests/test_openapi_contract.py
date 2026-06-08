@@ -135,6 +135,28 @@ async def test_save_idea_has_request_body_schema():
 
 
 @pytest.mark.asyncio
+async def test_notes_have_request_and_response_schema():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/openapi.json")
+    spec = resp.json()
+
+    create_path = spec["paths"]["/notes"]["post"]
+    assert "requestBody" in create_path
+    request_schema = _resolve_schema(create_path["requestBody"]["content"]["application/json"]["schema"], spec)
+    request_props = request_schema.get("properties", {})
+    assert "title" in request_props
+    assert "content" in request_props
+    assert "note_type" in request_props
+    assert "source" in request_props
+
+    list_schema = _success_response_schema(spec, "/notes", "get")
+    assert "notes" in list_schema.get("properties", {})
+    detail_schema = _success_response_schema(spec, "/notes/{note_id}", "get")
+    assert "note" in detail_schema.get("properties", {})
+
+
+@pytest.mark.asyncio
 async def test_main_endpoints_have_response_schema():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -154,6 +176,10 @@ async def test_main_endpoints_have_response_schema():
         ("/ideas", "post"),
         ("/ideas", "get"),
         ("/ideas/{idea_id}", "get"),
+        ("/notes", "post"),
+        ("/notes", "get"),
+        ("/notes/{note_id}", "get"),
+        ("/notes/{note_id}", "patch"),
         ("/agent/run", "post"),
         ("/agent/runs/{run_id}", "get"),
     ]

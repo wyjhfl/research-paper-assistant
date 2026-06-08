@@ -603,6 +603,70 @@ export async function generateReviewMatrix(
   });
 }
 
+export interface ResearchNoteSource {
+  paper_id?: number | null;
+  paper_title?: string | null;
+  chunk_id?: number | null;
+  chunk_index?: number | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  score?: number | null;
+  source_kind?: string | null;
+  retrieval_mode?: string | null;
+  matched_fields?: string[];
+}
+
+export interface ResearchNoteItem {
+  id: number;
+  title: string;
+  content: string;
+  note_type: "manual" | "qa_answer" | "source_snippet" | "review_matrix" | "idea" | string;
+  paper_id: number | null;
+  paper_title?: string | null;
+  chunk_id: number | null;
+  source: ResearchNoteSource;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchNoteListResponse {
+  notes: ResearchNoteItem[];
+  total: number;
+}
+
+export interface ResearchNoteResponse {
+  note: ResearchNoteItem;
+}
+
+export interface CreateResearchNoteRequest {
+  title: string;
+  content: string;
+  note_type?: "manual" | "qa_answer" | "source_snippet" | "review_matrix" | "idea";
+  paper_id?: number | null;
+  chunk_id?: number | null;
+  source?: ResearchNoteSource;
+  tags?: string[];
+}
+
+export async function createResearchNote(req: CreateResearchNoteRequest): Promise<ResearchNoteResponse> {
+  return apiFetch<ResearchNoteResponse>("/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function fetchResearchNotes(limit: number = 100): Promise<ResearchNoteListResponse> {
+  return apiFetch<ResearchNoteListResponse>(`/notes?limit=${limit}`);
+}
+
+export async function deleteResearchNote(noteId: number): Promise<void> {
+  await apiFetch<void>(`/notes/${noteId}`, {
+    method: "DELETE",
+  });
+}
+
 export interface ModelCallEvent {
   id: number;
   operation: string;

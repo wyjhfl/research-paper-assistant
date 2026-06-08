@@ -789,6 +789,105 @@ Phase 24 起，所有 REST API 请求体使用 Pydantic schema 校验。校验�
 
 ## Ideas
 
+## Notes
+
+### POST /notes
+
+用途：保存本地研究笔记，可来自手动输入、问答回答、来源片段、综述表或 Idea。该接口不调用模型，不保存 API Key、Authorization、prompt 隐藏上下文或完整检索日志。
+
+**请求体**：
+
+```json
+{
+  "title": "跨论文问答：研究空白",
+  "content": "回答或手动笔记正文",
+  "note_type": "qa_answer",
+  "paper_id": 1,
+  "chunk_id": 10,
+  "source": {
+    "paper_id": 1,
+    "paper_title": "Attention Is All You Need",
+    "chunk_id": 10,
+    "chunk_index": 0,
+    "page_start": 1,
+    "page_end": 2,
+    "score": 0.82,
+    "source_kind": "qa_answer"
+  },
+  "tags": ["qa", "related-work"]
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| title | string | 是 | 笔记标题，最长 512 |
+| content | string | 是 | 笔记正文，最长 8000 |
+| note_type | string | 否 | `manual` / `qa_answer` / `source_snippet` / `review_matrix` / `idea` |
+| paper_id | int | 否 | 关联论文，必须属于当前 user_id |
+| chunk_id | int | 否 | 关联 chunk，必须属于同一 paper |
+| source | object | 否 | 只保留安全白名单字段 |
+| tags | string[] | 否 | 最多 20 个标签 |
+
+**响应** (201)：
+
+```json
+{
+  "note": {
+    "id": 1,
+    "title": "跨论文问答：研究空白",
+    "content": "回答或手动笔记正文",
+    "note_type": "qa_answer",
+    "paper_id": 1,
+    "paper_title": "Attention Is All You Need",
+    "chunk_id": 10,
+    "source": {
+      "paper_id": 1,
+      "chunk_id": 10,
+      "chunk_index": 0,
+      "score": 0.82
+    },
+    "tags": ["qa"],
+    "created_at": "2026-06-08T00:00:00Z",
+    "updated_at": "2026-06-08T00:00:00Z"
+  }
+}
+```
+
+### GET /notes
+
+查询当前用户的研究笔记。
+
+参数：
+
+| 参数 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| limit | int | 100 | 范围 [1, 200] |
+
+响应：
+
+```json
+{
+  "notes": [],
+  "total": 0
+}
+```
+
+### GET /notes/{note_id}
+
+获取单条研究笔记。跨用户访问返回 404。
+
+### PATCH /notes/{note_id}
+
+更新标题、正文或标签。跨用户访问返回 404。
+
+### DELETE /notes/{note_id}
+
+删除研究笔记。跨用户访问返回 404。
+
+**用户隔离**：所有 notes 查询、更新和删除都按当前 user_id 过滤。paper/chunk 关联也会校验归属当前 user_id。
+
+---
+
 ### POST /papers/{paper_id}/ideas/extract
 
 用途：从论文中抽取研究 Idea 候选。默认先运行启发式抽取，启发式无结果时可选 LLM fallback。

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import health, papers, ideas, agent, usage, auth, jobs
+from .routers import health, papers, ideas, agent, usage, auth, jobs, notes
 from .database import init_db
 from .config import settings, parse_cors_allowed_origins
 from .services.job_worker import job_worker
@@ -34,6 +34,7 @@ app.include_router(ideas.router)
 app.include_router(agent.router)
 app.include_router(usage.router)
 app.include_router(jobs.router)
+app.include_router(notes.router)
 
 
 @app.get("/")

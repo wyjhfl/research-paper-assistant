@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   fetchPapers,
   generateReviewMatrix,
+  createResearchNote,
   getErrorMessage,
   type PaperListItem,
   type ReviewMatrixResponse,
@@ -64,6 +65,7 @@ export default function ReviewMatrix() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReviewMatrixResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetchPapers()
@@ -116,6 +118,23 @@ export default function ReviewMatrix() {
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setError("复制失败，请手动选择表格内容复制");
+    }
+  }
+
+  async function saveMatrixNote() {
+    if (!result) return;
+    try {
+      await createResearchNote({
+        title: `文献综述表：${result.total_papers} 篇论文`,
+        content: matrixToMarkdown(result),
+        note_type: "review_matrix",
+        source: { source_kind: "review_matrix" },
+        tags: ["review", "matrix"],
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1600);
+    } catch (err) {
+      setError(getErrorMessage(err, "保存综述表到笔记失败"));
     }
   }
 
@@ -225,6 +244,13 @@ export default function ReviewMatrix() {
               className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
               {copied ? "已复制" : "复制 Markdown"}
+            </button>
+            <button
+              type="button"
+              onClick={saveMatrixNote}
+              className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+            >
+              {saved ? "已保存" : "存为笔记"}
             </button>
           </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { createResearchNote, getErrorMessage } from "@/lib/api";
 
 interface EvidenceSource {
   paper_id: number;
@@ -68,6 +69,8 @@ export default function EvidenceSourcesPanel({
 }: EvidenceSourcesPanelProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (sources.length === 0) return null;
 
@@ -106,6 +109,36 @@ export default function EvidenceSourcesPanel({
     window.setTimeout(() => setCopiedKey(null), 1600);
   }
 
+  async function saveSourceNote(source: EvidenceSource, idx: number) {
+    const key = sourceKey(source, idx);
+    setSaveError(null);
+    try {
+      await createResearchNote({
+        title: `来源片段：${source.paper_title || `Paper ${source.paper_id}`} / chunk #${source.chunk_index}`,
+        content: source.text_excerpt,
+        note_type: "source_snippet",
+        paper_id: source.paper_id || fallbackPaperId || null,
+        chunk_id: source.chunk_id,
+        source: {
+          paper_id: source.paper_id || fallbackPaperId || null,
+          paper_title: source.paper_title || null,
+          chunk_id: source.chunk_id,
+          chunk_index: source.chunk_index,
+          page_start: source.page_start,
+          page_end: source.page_end,
+          score: source.score,
+          retrieval_mode: source.retrieval_mode,
+          source_kind: "evidence_source",
+        },
+        tags: ["source"],
+      });
+      setSavedKey(key);
+      window.setTimeout(() => setSavedKey(null), 1600);
+    } catch (err) {
+      setSaveError(getErrorMessage(err, "保存来源片段失败"));
+    }
+  }
+
   const topScore = maxScore(sources, (source) => source.score);
   const topLexicalScore = maxScore(sources, (source) => source.lexical_score);
   const topVectorScore = maxScore(sources, (source) => source.vector_score);
@@ -129,6 +162,12 @@ export default function EvidenceSourcesPanel({
           检索模式: {buildModeSummary(sources) || "无"}
         </p>
       </div>
+
+      {saveError && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          {saveError}
+        </div>
+      )}
 
       <div className="space-y-3">
         {sources.map((source, idx) => {
@@ -166,6 +205,13 @@ export default function EvidenceSourcesPanel({
                   className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
                 >
                   {copiedKey === key ? "已复制" : copiedKey === `${key}-failed` ? "复制失败" : "复制片段"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveSourceNote(source, idx)}
+                  className="rounded border border-blue-200 bg-white px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                >
+                  {savedKey === key ? "已保存" : "存为笔记"}
                 </button>
               </div>
 

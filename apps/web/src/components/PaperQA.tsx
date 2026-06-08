@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   askPaper,
+  createResearchNote,
   getErrorMessage,
   SINGLE_PAPER_QUESTION_PRESETS,
   type AskResponse,
@@ -42,6 +43,7 @@ export default function PaperQA({ paperId }: PaperQAProps) {
   const [error, setError] = useState<string | null>(null);
   const [allowLowConfidence, setAllowLowConfidence] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +81,36 @@ export default function PaperQA({ paperId }: PaperQAProps) {
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setError("复制失败，请手动选择回答内容复制");
+    }
+  }
+
+  async function saveAnswerNote() {
+    if (!result?.answer) return;
+    try {
+      await createResearchNote({
+        title: `单论文问答：${question.slice(0, 80) || `Paper ${paperId}`}`,
+        content: result.answer,
+        note_type: "qa_answer",
+        paper_id: paperId,
+        chunk_id: result.sources[0]?.chunk_id ?? null,
+        source: result.sources[0]
+          ? {
+              paper_id: paperId,
+              chunk_id: result.sources[0].chunk_id,
+              chunk_index: result.sources[0].chunk_index,
+              page_start: result.sources[0].page_start,
+              page_end: result.sources[0].page_end,
+              score: result.sources[0].score,
+              retrieval_mode: result.sources[0].retrieval_mode,
+              source_kind: "qa_answer",
+            }
+          : { paper_id: paperId, source_kind: "qa_answer" },
+        tags: ["qa"],
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1600);
+    } catch (err) {
+      setError(getErrorMessage(err, "保存回答到笔记失败"));
     }
   }
 
@@ -178,13 +210,22 @@ export default function PaperQA({ paperId }: PaperQAProps) {
                 </span>
               )}
               {result.answer && (
-                <button
-                  type="button"
-                  onClick={copyAnswer}
-                  className="ml-auto rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
-                >
-                  {copied ? "已复制" : "复制回答"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={copyAnswer}
+                    className="ml-auto rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    {copied ? "已复制" : "复制回答"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveAnswerNote}
+                    className="rounded border border-blue-200 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                  >
+                    {saved ? "已保存" : "存为笔记"}
+                  </button>
+                </>
               )}
             </div>
 
