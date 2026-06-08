@@ -230,12 +230,20 @@ def check_personal_workflow(api_base: str) -> list[Check]:
     ]
     ok_all = True
     parts: list[str] = []
+    counts: dict[str, int] = {}
     for label, path, collection_key in endpoint_specs:
         ok, msg = _http_json(api_base, path)
         count = _count_json_items(msg, collection_key) if ok else None
         endpoint_ok = ok and count is not None
         ok_all = ok_all and endpoint_ok
+        if endpoint_ok:
+            counts[label] = count
         parts.append(f"{label}={count}" if endpoint_ok else f"{label}=unavailable")
+    if ok_all:
+        if counts.get("papers", 0) == 0:
+            parts.append("next=upload_first_paper; visit /papers")
+        elif counts.get("notes", 0) == 0:
+            parts.append("next=save_first_research_note; visit /notes")
     return [Check("personal workflow endpoints", ok_all, ", ".join(parts))]
 
 
