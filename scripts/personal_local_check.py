@@ -169,12 +169,39 @@ def _http_status(url: str, timeout: int = 10) -> tuple[bool, str]:
         return False, type(exc).__name__
 
 
+def _readiness_message(message: str) -> str:
+    try:
+        data = json.loads(message)
+    except json.JSONDecodeError:
+        return message
+    if data.get("ready") is True:
+        return message
+
+    current = data.get("alembic_current")
+    head = data.get("alembic_head")
+    if not current and not head:
+        return message
+
+    current_text = str(current) if current else "<unknown>"
+    head_text = str(head) if head else "<unknown>"
+    hint = (
+        "readiness recovery hint: "
+        f"alembic_current={current_text}; alembic_head={head_text}; "
+        "see docs/LOCAL_DOCKER_RUNBOOK.md; "
+        "first run read-only `docker compose exec -T backend python -m alembic current`; "
+        "if the schema already exists and only version tracking is stale, manually run "
+        f"non-destructive `docker compose exec -T backend python -m alembic stamp {head_text}`."
+    )
+    return f"{message}; {hint}"
+
+
 def check_http(api_base: str, frontend_base: str) -> list[Check]:
     checks: list[Check] = []
     ok, msg = _http_json(api_base, "/health")
     checks.append(Check("GET /health", ok and '"status": "ok"' in msg, msg))
     ok, msg = _http_json(api_base, "/health/ready")
-    checks.append(Check("GET /health/ready", ok and '"ready": true' in msg, msg))
+    ready_ok = ok and '"ready": true' in msg
+    checks.append(Check("GET /health/ready", ready_ok, msg if ready_ok else _readiness_message(msg)))
     ok, msg = _http_status(frontend_base)
     checks.append(Check("GET frontend", ok, msg))
     return checks

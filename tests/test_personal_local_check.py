@@ -133,6 +133,54 @@ class TestPersonalLocalCheckRuntime:
         assert out["ok"] is False
         assert any(c["name"] == "git sensitive paths not tracked" and not c["ok"] for c in out["checks"])
 
+    def test_readiness_failure_includes_non_destructive_alembic_recovery_hint(self, monkeypatch, capsys):
+        module = load_module()
+
+        def fake_run(args, timeout=60):
+            cmd = " ".join(args)
+            if "ls-files" in cmd or "status --short" in cmd:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if "docker --version" in cmd:
+                return subprocess.CompletedProcess(args, 0, "Docker version test", "")
+            if "docker compose ps" in cmd:
+                service_rows = "\n".join([
+                    '{"Service":"backend","State":"running","Health":"healthy"}',
+                    '{"Service":"frontend","State":"running","Health":""}',
+                    '{"Service":"postgres","State":"running","Health":"healthy"}',
+                ])
+                return subprocess.CompletedProcess(args, 0, service_rows, "")
+            if "smoke_check.py" in cmd or "model_smoke_check.py" in cmd:
+                return subprocess.CompletedProcess(args, 0, "RESULT: ALL CHECKS PASSED", "")
+            return subprocess.CompletedProcess(args, 0, "PASSED", "")
+
+        def fake_http_json(api_base, path, timeout=10):
+            if path == "/health":
+                return True, '{"database": "connected", "status": "ok", "version": "1.0.1"}'
+            if path == "/health/ready":
+                return True, (
+                    '{"ready": false, "database": "connected", '
+                    '"alembic_current": "003_job_runs", "alembic_head": "004_research_notes"}'
+                )
+            raise AssertionError(path)
+
+        monkeypatch.setattr(module, "_run", fake_run)
+        monkeypatch.setattr(module, "_http_json", fake_http_json)
+        monkeypatch.setattr(module, "_http_status", lambda url, timeout=10: (True, "status=200"))
+        monkeypatch.setattr(module, "resolve_git", lambda: "git")
+
+        assert module.main([]) == 1
+        out = json.loads(capsys.readouterr().out)
+        ready = next(c for c in out["checks"] if c["name"] == "GET /health/ready")
+
+        assert ready["ok"] is False
+        assert "alembic_current=003_job_runs" in ready["message"]
+        assert "alembic_head=004_research_notes" in ready["message"]
+        assert "LOCAL_DOCKER_RUNBOOK.md" in ready["message"]
+        assert "alembic current" in ready["message"]
+        assert "alembic stamp" in ready["message"]
+        assert "non-destructive" in ready["message"]
+        assert "down -v" not in ready["message"]
+
     def test_default_skips_model_smoke(self, monkeypatch, capsys):
         module = load_module()
         commands: list[str] = []
